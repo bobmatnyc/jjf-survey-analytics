@@ -1,0 +1,52 @@
+# Core dependencies
+click>=8.1.0
+pydantic>=2.0.0
+python-dotenv>=1.0.0
+
+# Async and DI framework
+dependency-injector>=4.41.0
+asyncio-mqtt>=0.13.0
+
+# Database
+sqlalchemy>=2.0.0
+alembic>=1.12.0
+aiosqlite>=0.19.0
+
+# Google Sheets integration
+gspread>=5.10.0
+google-auth>=2.22.0
+google-auth-oauthlib>=1.0.0
+google-auth-httplib2>=0.2.0
+
+# Data processing
+pandas>=2.0.0
+numpy>=1.24.0
+python-dateutil>=2.8.0
+
+# HTTP and async
+aiohttp>=3.8.0
+httpx>=0.24.0
+
+# Logging and monitoring
+structlog>=23.1.0
+rich>=13.0.0
+
+# Development dependencies
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.1.0
+pytest-mock>=3.11.0
+black>=23.0.0
+isort>=5.12.0
+flake8>=6.0.0
+mypy>=1.5.0
+pre-commit>=3.3.0
+
+# Documentation
+mkdocs>=1.5.0
+mkdocs-material>=9.0.0
+mkdocstrings[python]>=0.22.0
+
+# Optional: Enhanced data processing
+openpyxl>=3.1.0
+xlsxwriter>=3.1.0

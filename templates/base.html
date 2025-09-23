@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Surveyor Data Viewer{% endblock %}</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Custom Tailwind Config -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'survey-blue': '#1e40af',
+                        'survey-green': '#059669',
+                        'survey-purple': '#7c3aed',
+                        'survey-orange': '#ea580c'
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Custom styles -->
+    <style>
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .hover-scale {
+            transition: transform 0.2s ease-in-out;
+        }
+        
+        .hover-scale:hover {
+            transform: scale(1.02);
+        }
+        
+        .table-row-hover:hover {
+            background-color: #f8fafc;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-lg border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <!-- Logo -->
+                    <div class="flex-shrink-0 flex items-center">
+                        <i class="fas fa-chart-bar text-2xl text-survey-blue mr-3"></i>
+                        <h1 class="text-xl font-bold text-gray-900">
+                            <a href="{{ url_for('dashboard') }}" class="hover:text-survey-blue transition-colors">
+                                Surveyor Data Viewer
+                            </a>
+                        </h1>
+                    </div>
+                    
+                    <!-- Navigation Links -->
+                    <div class="hidden md:ml-10 md:flex md:space-x-8">
+                        <a href="{{ url_for('dashboard') }}"
+                           class="{% if request.endpoint == 'dashboard' %}text-survey-blue border-b-2 border-survey-blue{% else %}text-gray-500 hover:text-gray-700{% endif %} px-3 py-2 text-sm font-medium transition-colors">
+                            <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
+                        </a>
+                        <a href="{{ url_for('spreadsheets') }}"
+                           class="{% if request.endpoint == 'spreadsheets' %}text-survey-blue border-b-2 border-survey-blue{% else %}text-gray-500 hover:text-gray-700{% endif %} px-3 py-2 text-sm font-medium transition-colors">
+                            <i class="fas fa-table mr-2"></i>Spreadsheets
+                        </a>
+                        <a href="{{ url_for('survey_dashboard') }}"
+                           class="{% if request.endpoint in ['survey_dashboard', 'survey_analytics', 'survey_responses'] %}text-survey-blue border-b-2 border-survey-blue{% else %}text-gray-500 hover:text-gray-700{% endif %} px-3 py-2 text-sm font-medium transition-colors">
+                            <i class="fas fa-chart-line mr-2"></i>Survey Analytics
+                        </a>
+                        <a href="{{ url_for('sync_dashboard') }}"
+                           class="{% if request.endpoint == 'sync_dashboard' %}text-survey-blue border-b-2 border-survey-blue{% else %}text-gray-500 hover:text-gray-700{% endif %} px-3 py-2 text-sm font-medium transition-colors">
+                            <i class="fas fa-sync-alt mr-2"></i>Auto-Sync
+                        </a>
+                        <a href="{{ url_for('extraction_jobs') }}"
+                           class="{% if request.endpoint == 'extraction_jobs' %}text-survey-blue border-b-2 border-survey-blue{% else %}text-gray-500 hover:text-gray-700{% endif %} px-3 py-2 text-sm font-medium transition-colors">
+                            <i class="fas fa-cogs mr-2"></i>Jobs
+                        </a>
+                    </div>
+                </div>
+                
+                <!-- Mobile menu button -->
+                <div class="md:hidden flex items-center">
+                    <button type="button" class="mobile-menu-button text-gray-500 hover:text-gray-700 focus:outline-none focus:text-gray-700" aria-label="toggle menu">
+                        <i class="fas fa-bars text-xl"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Mobile Navigation -->
+        <div class="mobile-menu hidden md:hidden bg-white border-t border-gray-200">
+            <div class="px-2 pt-2 pb-3 space-y-1">
+                <a href="{{ url_for('dashboard') }}"
+                   class="{% if request.endpoint == 'dashboard' %}bg-survey-blue text-white{% else %}text-gray-700 hover:bg-gray-100{% endif %} block px-3 py-2 rounded-md text-base font-medium transition-colors">
+                    <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
+                </a>
+                <a href="{{ url_for('spreadsheets') }}"
+                   class="{% if request.endpoint == 'spreadsheets' %}bg-survey-blue text-white{% else %}text-gray-700 hover:bg-gray-100{% endif %} block px-3 py-2 rounded-md text-base font-medium transition-colors">
+                    <i class="fas fa-table mr-2"></i>Spreadsheets
+                </a>
+                <a href="{{ url_for('survey_dashboard') }}"
+                   class="{% if request.endpoint in ['survey_dashboard', 'survey_analytics', 'survey_responses'] %}bg-survey-blue text-white{% else %}text-gray-700 hover:bg-gray-100{% endif %} block px-3 py-2 rounded-md text-base font-medium transition-colors">
+                    <i class="fas fa-chart-line mr-2"></i>Survey Analytics
+                </a>
+                <a href="{{ url_for('sync_dashboard') }}"
+                   class="{% if request.endpoint == 'sync_dashboard' %}bg-survey-blue text-white{% else %}text-gray-700 hover:bg-gray-100{% endif %} block px-3 py-2 rounded-md text-base font-medium transition-colors">
+                    <i class="fas fa-sync-alt mr-2"></i>Auto-Sync
+                </a>
+                <a href="{{ url_for('extraction_jobs') }}"
+                   class="{% if request.endpoint == 'extraction_jobs' %}bg-survey-blue text-white{% else %}text-gray-700 hover:bg-gray-100{% endif %} block px-3 py-2 rounded-md text-base font-medium transition-colors">
+                    <i class="fas fa-cogs mr-2"></i>Jobs
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+        <!-- Page Header -->
+        {% block header %}{% endblock %}
+        
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="mb-6">
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg mb-4 fade-in">
+                            <div class="flex items-center">
+                                <i class="fas fa-info-circle mr-2"></i>
+                                <span>{{ message }}</span>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+        
+        <!-- Page Content -->
+        <div class="fade-in">
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-gray-200 mt-12">
+        <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center">
+                <div class="text-sm text-gray-500">
+                    <i class="fas fa-database mr-2"></i>
+                    Surveyor Data Viewer - JJF Technology Assessment System
+                </div>
+                <div class="text-sm text-gray-500">
+                    <i class="fas fa-clock mr-2"></i>
+                    Last updated: <span id="current-time"></span>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JavaScript -->
+    <script>
+        // Mobile menu toggle
+        document.addEventListener('DOMContentLoaded', function() {
+            const mobileMenuButton = document.querySelector('.mobile-menu-button');
+            const mobileMenu = document.querySelector('.mobile-menu');
+            
+            if (mobileMenuButton && mobileMenu) {
+                mobileMenuButton.addEventListener('click', function() {
+                    mobileMenu.classList.toggle('hidden');
+                });
+            }
+            
+            // Update current time
+            function updateTime() {
+                const now = new Date();
+                const timeString = now.toLocaleString();
+                const timeElement = document.getElementById('current-time');
+                if (timeElement) {
+                    timeElement.textContent = timeString;
+                }
+            }
+            
+            updateTime();
+            setInterval(updateTime, 60000); // Update every minute
+        });
+        
+        // Utility functions
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(function() {
+                showNotification('Copied to clipboard!', 'success');
+            });
+        }
+        
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.className = `fixed top-4 right-4 z-50 px-4 py-2 rounded-lg text-white transition-all duration-300 transform translate-x-full`;
+            
+            switch(type) {
+                case 'success':
+                    notification.classList.add('bg-green-500');
+                    break;
+                case 'error':
+                    notification.classList.add('bg-red-500');
+                    break;
+                default:
+                    notification.classList.add('bg-blue-500');
+            }
+            
+            notification.innerHTML = `
+                <div class="flex items-center">
+                    <i class="fas fa-${type === 'success' ? 'check' : type === 'error' ? 'exclamation-triangle' : 'info-circle'} mr-2"></i>
+                    <span>${message}</span>
+                </div>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // Animate in
+            setTimeout(() => {
+                notification.classList.remove('translate-x-full');
+            }, 100);
+            
+            // Animate out and remove
+            setTimeout(() => {
+                notification.classList.add('translate-x-full');
+                setTimeout(() => {
+                    document.body.removeChild(notification);
+                }, 300);
+            }, 3000);
+        }
+    </script>
+    
+    {% block scripts %}{% endblock %}
+</body>
+</html>

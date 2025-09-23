@@ -1,0 +1,322 @@
+{% extends "base.html" %}
+
+{% block title %}Survey Response Activity - Surveyor Data Viewer{% endblock %}
+
+{% block header %}
+<div class="mb-8">
+    <div class="flex justify-between items-center">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">
+                <i class="fas fa-users text-survey-green mr-3"></i>
+                Survey Response Activity
+            </h1>
+            <p class="text-gray-600">Track when and who responded to surveys with detailed activity monitoring</p>
+        </div>
+        <div class="flex space-x-3">
+            <select id="daysFilter" onchange="changeDaysFilter(this.value)" 
+                    class="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-survey-blue">
+                <option value="7" {% if days == 7 %}selected{% endif %}>Last 7 days</option>
+                <option value="30" {% if days == 30 %}selected{% endif %}>Last 30 days</option>
+                <option value="90" {% if days == 90 %}selected{% endif %}>Last 90 days</option>
+            </select>
+            <a href="{{ url_for('survey_dashboard') }}" 
+               class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors">
+                <i class="fas fa-arrow-left mr-2"></i>
+                Back to Dashboard
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Activity Summary -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+    <!-- Total Activity -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <div class="flex items-center">
+            <div class="flex-shrink-0">
+                <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-chart-line text-blue-600 text-xl"></i>
+                </div>
+            </div>
+            <div class="ml-4">
+                <p class="text-sm font-medium text-gray-500">Total Responses</p>
+                <p class="text-2xl font-bold text-gray-900">{{ activity|length }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Unique Respondents -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <div class="flex items-center">
+            <div class="flex-shrink-0">
+                <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-users text-green-600 text-xl"></i>
+                </div>
+            </div>
+            <div class="ml-4">
+                <p class="text-sm font-medium text-gray-500">Active Respondents</p>
+                <p class="text-2xl font-bold text-gray-900">{{ respondent_analysis.browser_breakdown|length }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Most Active Survey -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <div class="flex items-center">
+            <div class="flex-shrink-0">
+                <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-trophy text-purple-600 text-xl"></i>
+                </div>
+            </div>
+            <div class="ml-4">
+                <p class="text-sm font-medium text-gray-500">Most Active</p>
+                <p class="text-lg font-bold text-gray-900">
+                    {% if activity %}
+                        {{ activity[0].survey_name.split(' - ')[0] }}
+                    {% else %}
+                        No Activity
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Response Rate -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <div class="flex items-center">
+            <div class="flex-shrink-0">
+                <div class="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-percentage text-orange-600 text-xl"></i>
+                </div>
+            </div>
+            <div class="ml-4">
+                <p class="text-sm font-medium text-gray-500">Avg Daily</p>
+                <p class="text-2xl font-bold text-gray-900">
+                    {% if time_series.daily_responses %}
+                        {{ "%.1f"|format((time_series.daily_responses|map(attribute='responses')|sum) / (time_series.daily_responses|length)) }}
+                    {% else %}
+                        0
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Response Timeline -->
+<div class="bg-white rounded-lg shadow-md mb-8">
+    <div class="px-6 py-4 border-b border-gray-200">
+        <h3 class="text-lg font-semibold text-gray-900">
+            <i class="fas fa-clock text-survey-blue mr-2"></i>
+            Response Timeline (Last {{ days }} days)
+        </h3>
+    </div>
+    <div class="p-6">
+        {% if activity %}
+        <div class="space-y-4">
+            {% for response in activity[:20] %}
+            <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                <div class="flex items-center">
+                    <div class="w-10 h-10 rounded-lg flex items-center justify-center text-white text-sm font-medium mr-4
+                        {% if response.survey_type == 'survey' %}bg-survey-blue
+                        {% elif response.survey_type == 'assessment' %}bg-survey-green
+                        {% elif response.survey_type == 'inventory' %}bg-survey-purple
+                        {% else %}bg-gray-400{% endif %}">
+                        {% if response.survey_type == 'survey' %}S
+                        {% elif response.survey_type == 'assessment' %}A
+                        {% elif response.survey_type == 'inventory' %}I
+                        {% else %}?{% endif %}
+                    </div>
+                    <div>
+                        <h4 class="font-medium text-gray-900">{{ response.survey_name }}</h4>
+                        <p class="text-sm text-gray-500">{{ response.survey_type|title }} • {{ response.response_date }}</p>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <div class="text-lg font-bold text-gray-900">{{ response.response_count }}</div>
+                    <div class="text-sm text-gray-500">
+                        {{ response.unique_respondents }} unique respondent{{ 's' if response.unique_respondents != 1 else '' }}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+            
+            {% if activity|length > 20 %}
+            <div class="text-center py-4">
+                <button onclick="loadMoreActivity()" 
+                        class="text-survey-blue hover:text-blue-700 font-medium">
+                    Load more activity ({{ activity|length - 20 }} remaining)
+                </button>
+            </div>
+            {% endif %}
+        </div>
+        {% else %}
+        <div class="text-center py-12">
+            <i class="fas fa-clock text-gray-400 text-4xl mb-4"></i>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">No recent activity</h3>
+            <p class="text-gray-500">No survey responses found in the last {{ days }} days</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Respondent Details -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+    <!-- Browser & Device Analysis -->
+    <div class="bg-white rounded-lg shadow-md">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h3 class="text-lg font-semibold text-gray-900">
+                <i class="fas fa-desktop text-survey-purple mr-2"></i>
+                Respondent Technology
+            </h3>
+        </div>
+        <div class="p-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Browser Breakdown -->
+                <div>
+                    <h4 class="font-medium text-gray-900 mb-4">Browsers Used</h4>
+                    {% if respondent_analysis.browser_breakdown %}
+                    <div class="space-y-3">
+                        {% for browser in respondent_analysis.browser_breakdown %}
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center">
+                                <div class="w-3 h-3 rounded-full mr-3
+                                    {% if loop.index == 1 %}bg-blue-500
+                                    {% elif loop.index == 2 %}bg-green-500
+                                    {% elif loop.index == 3 %}bg-purple-500
+                                    {% elif loop.index == 4 %}bg-orange-500
+                                    {% else %}bg-gray-400{% endif %}"></div>
+                                <span class="text-sm font-medium text-gray-700">{{ browser.browser }}</span>
+                            </div>
+                            <div class="text-right">
+                                <span class="text-sm font-bold text-gray-900">{{ browser.count }}</span>
+                                <span class="text-xs text-gray-500 ml-1">
+                                    ({{ "%.1f"|format((browser.count / respondent_analysis.browser_breakdown|map(attribute='count')|sum) * 100) }}%)
+                                </span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-sm text-gray-500">No browser data available</p>
+                    {% endif %}
+                </div>
+
+                <!-- Device Breakdown -->
+                <div>
+                    <h4 class="font-medium text-gray-900 mb-4">Devices Used</h4>
+                    {% if respondent_analysis.device_breakdown %}
+                    <div class="space-y-3">
+                        {% for device in respondent_analysis.device_breakdown %}
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center">
+                                <div class="w-3 h-3 rounded-full mr-3
+                                    {% if loop.index == 1 %}bg-blue-500
+                                    {% elif loop.index == 2 %}bg-green-500
+                                    {% elif loop.index == 3 %}bg-purple-500
+                                    {% elif loop.index == 4 %}bg-orange-500
+                                    {% else %}bg-gray-400{% endif %}"></div>
+                                <span class="text-sm font-medium text-gray-700">{{ device.device }}</span>
+                            </div>
+                            <div class="text-right">
+                                <span class="text-sm font-bold text-gray-900">{{ device.count }}</span>
+                                <span class="text-xs text-gray-500 ml-1">
+                                    ({{ "%.1f"|format((device.count / respondent_analysis.device_breakdown|map(attribute='count')|sum) * 100) }}%)
+                                </span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-sm text-gray-500">No device data available</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Response Patterns -->
+    <div class="bg-white rounded-lg shadow-md">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h3 class="text-lg font-semibold text-gray-900">
+                <i class="fas fa-chart-bar text-survey-orange mr-2"></i>
+                Response Patterns
+            </h3>
+        </div>
+        <div class="p-6">
+            <!-- Response Frequency -->
+            <div class="mb-6">
+                <h4 class="font-medium text-gray-900 mb-4">Response Frequency</h4>
+                {% if respondent_analysis.response_frequency %}
+                <div class="space-y-3">
+                    {% for freq in respondent_analysis.response_frequency %}
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-gray-700">
+                            {{ freq.total_responses }} response{{ 's' if freq.total_responses != 1 else '' }}
+                        </span>
+                        <div class="flex items-center space-x-3">
+                            <span class="text-sm font-medium text-gray-900">{{ freq.respondent_count }} user{{ 's' if freq.respondent_count != 1 else '' }}</span>
+                            <div class="w-20 bg-gray-200 rounded-full h-2">
+                                <div class="bg-survey-orange h-2 rounded-full" 
+                                     style="width: {{ (freq.respondent_count / respondent_analysis.response_frequency[0].respondent_count * 100) }}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-sm text-gray-500">No frequency data available</p>
+                {% endif %}
+            </div>
+
+            <!-- Daily Activity Chart -->
+            <div>
+                <h4 class="font-medium text-gray-900 mb-4">Daily Activity</h4>
+                {% if time_series.daily_responses %}
+                <div class="space-y-2">
+                    {% for day in time_series.daily_responses[-7:] %}
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-gray-700">{{ day.date }}</span>
+                        <div class="flex items-center space-x-3">
+                            <span class="text-sm font-medium text-gray-900">{{ day.responses }}</span>
+                            <div class="w-16 bg-gray-200 rounded-full h-2">
+                                <div class="bg-survey-green h-2 rounded-full" 
+                                     style="width: {{ (day.responses / (time_series.daily_responses|map(attribute='responses')|max)) * 100 }}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-sm text-gray-500">No daily activity data available</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function changeDaysFilter(days) {
+        const url = new URL(window.location);
+        url.searchParams.set('days', days);
+        window.location.href = url.toString();
+    }
+    
+    function loadMoreActivity() {
+        showNotification('Loading more activity...', 'info');
+        // This would typically load more data via AJAX
+        // For now, just show a message
+        showNotification('Feature coming soon!', 'info');
+    }
+    
+    // Auto-refresh every 2 minutes for live activity
+    setInterval(function() {
+        console.log('Auto-refreshing response activity...');
+        location.reload();
+    }, 120000); // 2 minutes
+</script>
+{% endblock %}

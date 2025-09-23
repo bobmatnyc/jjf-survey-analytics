@@ -1,0 +1,392 @@
+{% extends "base.html" %}
+
+{% block title %}Auto-Sync Dashboard - Surveyor Data Viewer{% endblock %}
+
+{% block header %}
+<div class="mb-8">
+    <div class="flex justify-between items-center">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">
+                <i class="fas fa-sync-alt text-survey-purple mr-3"></i>
+                Auto-Sync Dashboard
+            </h1>
+            <p class="text-gray-600">Monitor and control automatic spreadsheet data synchronization</p>
+        </div>
+        <div class="flex space-x-3">
+            <button onclick="forceSyncNow()" 
+                    class="inline-flex items-center px-4 py-2 bg-survey-blue text-white rounded-md hover:bg-blue-700 transition-colors">
+                <i class="fas fa-bolt mr-2"></i>
+                Force Sync Now
+            </button>
+            <button id="toggleSyncBtn" onclick="toggleAutoSync()" 
+                    class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors">
+                <i id="toggleSyncIcon" class="fas fa-play mr-2"></i>
+                <span id="toggleSyncText">Start Auto-Sync</span>
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Service Status -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+    <!-- Service Status -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <div class="flex items-center">
+            <div class="flex-shrink-0">
+                <div id="serviceStatusIcon" class="w-12 h-12 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-circle text-xl"></i>
+                </div>
+            </div>
+            <div class="ml-4">
+                <p class="text-sm font-medium text-gray-500">Service Status</p>
+                <p id="serviceStatusText" class="text-2xl font-bold">Loading...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pending Changes -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <div class="flex items-center">
+            <div class="flex-shrink-0">
+                <div class="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-clock text-orange-600 text-xl"></i>
+                </div>
+            </div>
+            <div class="ml-4">
+                <p class="text-sm font-medium text-gray-500">Pending Changes</p>
+                <p id="pendingChanges" class="text-2xl font-bold text-gray-900">{{ sync_status.pending_changes or 0 }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Total Synced -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <div class="flex items-center">
+            <div class="flex-shrink-0">
+                <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-check-circle text-green-600 text-xl"></i>
+                </div>
+            </div>
+            <div class="ml-4">
+                <p class="text-sm font-medium text-gray-500">Total Synced</p>
+                <p class="text-2xl font-bold text-gray-900">{{ sync_status.completed_syncs or 0 }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Last Sync -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <div class="flex items-center">
+            <div class="flex-shrink-0">
+                <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-history text-blue-600 text-xl"></i>
+                </div>
+            </div>
+            <div class="ml-4">
+                <p class="text-sm font-medium text-gray-500">Last Sync</p>
+                <p id="lastSyncTime" class="text-lg font-bold text-gray-900">
+                    {% if sync_status.last_sync %}
+                        {{ sync_status.last_sync|datetime }}
+                    {% else %}
+                        Never
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Sync Configuration and Status -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+    <!-- Sync Configuration -->
+    <div class="bg-white rounded-lg shadow-md">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h3 class="text-lg font-semibold text-gray-900">
+                <i class="fas fa-cog text-survey-blue mr-2"></i>
+                Sync Configuration
+            </h3>
+        </div>
+        <div class="p-6">
+            <div class="space-y-4">
+                <!-- Check Interval -->
+                <div>
+                    <label for="checkInterval" class="block text-sm font-medium text-gray-700 mb-2">
+                        Check Interval (seconds)
+                    </label>
+                    <div class="flex space-x-2">
+                        <input type="number" 
+                               id="checkInterval" 
+                               value="{{ service_stats.check_interval or 300 }}"
+                               min="60" 
+                               max="3600"
+                               class="flex-1 border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-survey-blue">
+                        <button onclick="updateInterval()" 
+                                class="px-4 py-2 bg-survey-blue text-white rounded-md hover:bg-blue-700 transition-colors">
+                            Update
+                        </button>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">How often to check for new data (60-3600 seconds)</p>
+                </div>
+
+                <!-- Auto-Start -->
+                <div class="flex items-center justify-between">
+                    <div>
+                        <label class="text-sm font-medium text-gray-700">Auto-start on server boot</label>
+                        <p class="text-xs text-gray-500">Automatically start sync service when server starts</p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="autoStartToggle" class="sr-only peer">
+                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Current Status -->
+    <div class="bg-white rounded-lg shadow-md">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h3 class="text-lg font-semibold text-gray-900">
+                <i class="fas fa-info-circle text-survey-green mr-2"></i>
+                Current Status
+            </h3>
+        </div>
+        <div class="p-6">
+            <div class="space-y-4">
+                <div class="flex justify-between items-center">
+                    <span class="text-sm font-medium text-gray-500">Service Running:</span>
+                    <span id="serviceRunningStatus" class="text-sm font-bold">{{ 'Yes' if service_stats.running else 'No' }}</span>
+                </div>
+                
+                <div class="flex justify-between items-center">
+                    <span class="text-sm font-medium text-gray-500">Last Check:</span>
+                    <span id="lastCheckTime" class="text-sm text-gray-900">
+                        {% if service_stats.last_check %}
+                            {{ service_stats.last_check|datetime }}
+                        {% else %}
+                            Never
+                        {% endif %}
+                    </span>
+                </div>
+                
+                <div class="flex justify-between items-center">
+                    <span class="text-sm font-medium text-gray-500">Next Check:</span>
+                    <span id="nextCheckTime" class="text-sm text-gray-900">
+                        {% if service_stats.next_check %}
+                            {{ service_stats.next_check|datetime }}
+                        {% else %}
+                            Not scheduled
+                        {% endif %}
+                    </span>
+                </div>
+                
+                <div class="flex justify-between items-center">
+                    <span class="text-sm font-medium text-gray-500">Total Syncs:</span>
+                    <span class="text-sm font-bold text-gray-900">{{ service_stats.sync_stats.total_syncs or 0 }}</span>
+                </div>
+                
+                <div class="flex justify-between items-center">
+                    <span class="text-sm font-medium text-gray-500">Success Rate:</span>
+                    <span class="text-sm font-bold text-green-600">
+                        {% if service_stats.sync_stats.total_syncs > 0 %}
+                            {{ "%.1f"|format((service_stats.sync_stats.successful_syncs / service_stats.sync_stats.total_syncs) * 100) }}%
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </span>
+                </div>
+                
+                {% if service_stats.sync_stats.last_error %}
+                <div class="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <p class="text-sm font-medium text-red-800">Last Error:</p>
+                    <p class="text-sm text-red-700 mt-1">{{ service_stats.sync_stats.last_error }}</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Sync Activity Log -->
+<div class="bg-white rounded-lg shadow-md">
+    <div class="px-6 py-4 border-b border-gray-200">
+        <div class="flex justify-between items-center">
+            <h3 class="text-lg font-semibold text-gray-900">
+                <i class="fas fa-list text-survey-orange mr-2"></i>
+                Recent Sync Activity
+            </h3>
+            <button onclick="refreshStatus()" 
+                    class="text-sm text-survey-blue hover:text-blue-700 font-medium">
+                <i class="fas fa-refresh mr-1"></i>Refresh
+            </button>
+        </div>
+    </div>
+    <div class="p-6">
+        <div id="syncActivity" class="space-y-3">
+            <!-- Activity will be loaded here -->
+            <div class="text-center py-8">
+                <i class="fas fa-spinner fa-spin text-gray-400 text-2xl mb-3"></i>
+                <p class="text-gray-500">Loading sync activity...</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let serviceRunning = {{ 'true' if service_stats.running else 'false' }};
+    
+    function updateServiceStatus() {
+        fetch('/api/sync/status')
+            .then(response => response.json())
+            .then(data => {
+                // Update service status
+                const statusIcon = document.getElementById('serviceStatusIcon');
+                const statusText = document.getElementById('serviceStatusText');
+                const runningStatus = document.getElementById('serviceRunningStatus');
+                
+                if (data.service_stats && data.service_stats.running) {
+                    statusIcon.className = 'w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center';
+                    statusIcon.innerHTML = '<i class="fas fa-circle text-green-600 text-xl"></i>';
+                    statusText.textContent = 'Running';
+                    statusText.className = 'text-2xl font-bold text-green-600';
+                    runningStatus.textContent = 'Yes';
+                    serviceRunning = true;
+                } else {
+                    statusIcon.className = 'w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center';
+                    statusIcon.innerHTML = '<i class="fas fa-circle text-red-600 text-xl"></i>';
+                    statusText.textContent = 'Stopped';
+                    statusText.className = 'text-2xl font-bold text-red-600';
+                    runningStatus.textContent = 'No';
+                    serviceRunning = false;
+                }
+                
+                // Update toggle button
+                updateToggleButton();
+                
+                // Update other stats
+                if (data.pending_changes !== undefined) {
+                    document.getElementById('pendingChanges').textContent = data.pending_changes;
+                }
+                
+                if (data.service_stats && data.service_stats.last_check) {
+                    document.getElementById('lastCheckTime').textContent = new Date(data.service_stats.last_check).toLocaleString();
+                }
+                
+                if (data.service_stats && data.service_stats.next_check) {
+                    document.getElementById('nextCheckTime').textContent = new Date(data.service_stats.next_check).toLocaleString();
+                }
+            })
+            .catch(error => {
+                console.error('Error updating status:', error);
+            });
+    }
+    
+    function updateToggleButton() {
+        const toggleBtn = document.getElementById('toggleSyncBtn');
+        const toggleIcon = document.getElementById('toggleSyncIcon');
+        const toggleText = document.getElementById('toggleSyncText');
+        
+        if (serviceRunning) {
+            toggleIcon.className = 'fas fa-stop mr-2';
+            toggleText.textContent = 'Stop Auto-Sync';
+            toggleBtn.className = 'inline-flex items-center px-4 py-2 border border-red-300 rounded-md shadow-sm text-sm font-medium text-red-700 bg-white hover:bg-red-50 transition-colors';
+        } else {
+            toggleIcon.className = 'fas fa-play mr-2';
+            toggleText.textContent = 'Start Auto-Sync';
+            toggleBtn.className = 'inline-flex items-center px-4 py-2 border border-green-300 rounded-md shadow-sm text-sm font-medium text-green-700 bg-white hover:bg-green-50 transition-colors';
+        }
+    }
+    
+    function toggleAutoSync() {
+        const action = serviceRunning ? 'stop' : 'start';
+        const interval = document.getElementById('checkInterval').value;
+        
+        const requestBody = action === 'start' ? { check_interval: parseInt(interval) } : {};
+        
+        fetch(`/api/sync/${action}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification(data.message, 'success');
+                updateServiceStatus();
+            } else {
+                showNotification(data.error || 'Failed to toggle sync service', 'error');
+            }
+        })
+        .catch(error => {
+            showNotification('Error toggling sync service: ' + error, 'error');
+        });
+    }
+    
+    function forceSyncNow() {
+        showNotification('Forcing immediate sync...', 'info');
+        
+        fetch('/api/sync/force', {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification(data.message, 'success');
+                updateServiceStatus();
+            } else {
+                showNotification(data.error || 'Sync failed', 'error');
+            }
+        })
+        .catch(error => {
+            showNotification('Error forcing sync: ' + error, 'error');
+        });
+    }
+    
+    function updateInterval() {
+        const interval = document.getElementById('checkInterval').value;
+        
+        if (serviceRunning) {
+            // Restart with new interval
+            fetch('/api/sync/stop', { method: 'POST' })
+                .then(() => {
+                    return fetch('/api/sync/start', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ check_interval: parseInt(interval) })
+                    });
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showNotification(`Interval updated to ${interval} seconds`, 'success');
+                        updateServiceStatus();
+                    } else {
+                        showNotification('Failed to update interval', 'error');
+                    }
+                });
+        } else {
+            showNotification(`Interval will be ${interval} seconds when service starts`, 'info');
+        }
+    }
+    
+    function refreshStatus() {
+        updateServiceStatus();
+        showNotification('Status refreshed', 'info');
+    }
+    
+    // Initialize
+    document.addEventListener('DOMContentLoaded', function() {
+        updateServiceStatus();
+        updateToggleButton();
+        
+        // Auto-refresh every 30 seconds
+        setInterval(updateServiceStatus, 30000);
+    });
+</script>
+{% endblock %}

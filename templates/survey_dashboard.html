@@ -1,0 +1,333 @@
+{% extends "base.html" %}
+
+{% block title %}Survey Analytics Dashboard - Surveyor Data Viewer{% endblock %}
+
+{% block header %}
+<div class="mb-8">
+    <div class="flex justify-between items-center">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">
+                <i class="fas fa-chart-line text-survey-blue mr-3"></i>
+                Survey Analytics Dashboard
+            </h1>
+            <p class="text-gray-600">Comprehensive analysis of normalized survey data and response patterns</p>
+        </div>
+        <div class="flex space-x-3">
+            <a href="{{ url_for('survey_analytics') }}" 
+               class="inline-flex items-center px-4 py-2 bg-survey-blue text-white rounded-md hover:bg-blue-700 transition-colors">
+                <i class="fas fa-chart-bar mr-2"></i>
+                Detailed Analytics
+            </a>
+            <a href="{{ url_for('survey_responses') }}" 
+               class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors">
+                <i class="fas fa-users mr-2"></i>
+                Response Activity
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Overview Statistics -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+    <!-- Total Surveys -->
+    <div class="bg-white rounded-lg shadow-md p-6 hover-scale">
+        <div class="flex items-center">
+            <div class="flex-shrink-0">
+                <div class="w-12 h-12 bg-survey-blue bg-opacity-10 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-poll text-survey-blue text-xl"></i>
+                </div>
+            </div>
+            <div class="ml-4">
+                <p class="text-sm font-medium text-gray-500">Total Surveys</p>
+                <p class="text-2xl font-bold text-gray-900">{{ overview.total_surveys }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Total Responses -->
+    <div class="bg-white rounded-lg shadow-md p-6 hover-scale">
+        <div class="flex items-center">
+            <div class="flex-shrink-0">
+                <div class="w-12 h-12 bg-survey-green bg-opacity-10 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-comments text-survey-green text-xl"></i>
+                </div>
+            </div>
+            <div class="ml-4">
+                <p class="text-sm font-medium text-gray-500">Total Responses</p>
+                <p class="text-2xl font-bold text-gray-900">{{ overview.total_responses }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Unique Respondents -->
+    <div class="bg-white rounded-lg shadow-md p-6 hover-scale">
+        <div class="flex items-center">
+            <div class="flex-shrink-0">
+                <div class="w-12 h-12 bg-survey-purple bg-opacity-10 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-users text-survey-purple text-xl"></i>
+                </div>
+            </div>
+            <div class="ml-4">
+                <p class="text-sm font-medium text-gray-500">Unique Respondents</p>
+                <p class="text-2xl font-bold text-gray-900">{{ overview.unique_respondents }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Response Rate -->
+    <div class="bg-white rounded-lg shadow-md p-6 hover-scale">
+        <div class="flex items-center">
+            <div class="flex-shrink-0">
+                <div class="w-12 h-12 bg-survey-orange bg-opacity-10 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-percentage text-survey-orange text-xl"></i>
+                </div>
+            </div>
+            <div class="ml-4">
+                <p class="text-sm font-medium text-gray-500">Response Rate</p>
+                <p class="text-2xl font-bold text-gray-900">{{ overview.response_rate }}%</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Survey Breakdown and Completion Stats -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+    <!-- Survey Breakdown -->
+    <div class="bg-white rounded-lg shadow-md">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h3 class="text-lg font-semibold text-gray-900">
+                <i class="fas fa-chart-pie text-survey-blue mr-2"></i>
+                Survey Breakdown
+            </h3>
+        </div>
+        <div class="p-6">
+            {% if survey_breakdown %}
+            <div class="space-y-4">
+                {% for survey in survey_breakdown %}
+                <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                    <div class="flex items-center">
+                        <div class="w-10 h-10 rounded-lg flex items-center justify-center text-white text-sm font-medium mr-4
+                            {% if survey.survey_type == 'survey' %}bg-survey-blue
+                            {% elif survey.survey_type == 'assessment' %}bg-survey-green
+                            {% elif survey.survey_type == 'inventory' %}bg-survey-purple
+                            {% else %}bg-gray-400{% endif %}">
+                            {% if survey.survey_type == 'survey' %}S
+                            {% elif survey.survey_type == 'assessment' %}A
+                            {% elif survey.survey_type == 'inventory' %}I
+                            {% else %}?{% endif %}
+                        </div>
+                        <div>
+                            <h4 class="font-medium text-gray-900">{{ survey.survey_name }}</h4>
+                            <p class="text-sm text-gray-500">{{ survey.survey_type|title }}</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-lg font-bold text-gray-900">{{ survey.response_count }}</div>
+                        <div class="text-sm text-gray-500">responses</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-8">
+                <i class="fas fa-chart-pie text-gray-400 text-3xl mb-3"></i>
+                <p class="text-gray-500">No survey data available</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Completion Statistics -->
+    <div class="bg-white rounded-lg shadow-md">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h3 class="text-lg font-semibold text-gray-900">
+                <i class="fas fa-tasks text-survey-green mr-2"></i>
+                Completion Statistics
+            </h3>
+        </div>
+        <div class="p-6">
+            {% if completion_stats %}
+            <div class="space-y-4">
+                {% for stat in completion_stats %}
+                <div class="border-l-4 pl-4 
+                    {% if stat.completion_percentage >= 80 %}border-green-500
+                    {% elif stat.completion_percentage >= 60 %}border-yellow-500
+                    {% else %}border-red-500{% endif %}">
+                    <div class="flex justify-between items-center mb-2">
+                        <h4 class="font-medium text-gray-900">{{ stat.survey_name }}</h4>
+                        <span class="text-sm font-bold 
+                            {% if stat.completion_percentage >= 80 %}text-green-600
+                            {% elif stat.completion_percentage >= 60 %}text-yellow-600
+                            {% else %}text-red-600{% endif %}">
+                            {{ stat.completion_percentage or 0 }}%
+                        </span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div class="h-2 rounded-full 
+                            {% if stat.completion_percentage >= 80 %}bg-green-500
+                            {% elif stat.completion_percentage >= 60 %}bg-yellow-500
+                            {% else %}bg-red-500{% endif %}" 
+                             style="width: {{ stat.completion_percentage or 0 }}%"></div>
+                    </div>
+                    <div class="flex justify-between text-xs text-gray-500 mt-1">
+                        <span>{{ stat.actual_answers }} answered</span>
+                        <span>{{ stat.total_possible_answers }} total</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-8">
+                <i class="fas fa-tasks text-gray-400 text-3xl mb-3"></i>
+                <p class="text-gray-500">No completion data available</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Respondent Analysis -->
+<div class="bg-white rounded-lg shadow-md mb-8">
+    <div class="px-6 py-4 border-b border-gray-200">
+        <h3 class="text-lg font-semibold text-gray-900">
+            <i class="fas fa-users text-survey-purple mr-2"></i>
+            Respondent Analysis
+        </h3>
+    </div>
+    <div class="p-6">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <!-- Browser Breakdown -->
+            <div>
+                <h4 class="font-medium text-gray-900 mb-4">Browser Distribution</h4>
+                {% if respondent_analysis.browser_breakdown %}
+                <div class="space-y-3">
+                    {% for browser in respondent_analysis.browser_breakdown[:5] %}
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-700">{{ browser.browser }}</span>
+                        <div class="flex items-center space-x-2">
+                            <span class="text-sm font-medium text-gray-900">{{ browser.count }}</span>
+                            <div class="w-16 bg-gray-200 rounded-full h-2">
+                                <div class="bg-survey-blue h-2 rounded-full" 
+                                     style="width: {{ (browser.count / respondent_analysis.browser_breakdown[0].count * 100) }}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-sm text-gray-500">No browser data available</p>
+                {% endif %}
+            </div>
+
+            <!-- Device Breakdown -->
+            <div>
+                <h4 class="font-medium text-gray-900 mb-4">Device Distribution</h4>
+                {% if respondent_analysis.device_breakdown %}
+                <div class="space-y-3">
+                    {% for device in respondent_analysis.device_breakdown[:5] %}
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-700">{{ device.device }}</span>
+                        <div class="flex items-center space-x-2">
+                            <span class="text-sm font-medium text-gray-900">{{ device.count }}</span>
+                            <div class="w-16 bg-gray-200 rounded-full h-2">
+                                <div class="bg-survey-green h-2 rounded-full" 
+                                     style="width: {{ (device.count / respondent_analysis.device_breakdown[0].count * 100) }}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-sm text-gray-500">No device data available</p>
+                {% endif %}
+            </div>
+
+            <!-- Response Frequency -->
+            <div>
+                <h4 class="font-medium text-gray-900 mb-4">Response Frequency</h4>
+                {% if respondent_analysis.response_frequency %}
+                <div class="space-y-3">
+                    {% for freq in respondent_analysis.response_frequency %}
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-700">{{ freq.total_responses }} response{{ 's' if freq.total_responses != 1 else '' }}</span>
+                        <div class="flex items-center space-x-2">
+                            <span class="text-sm font-medium text-gray-900">{{ freq.respondent_count }} user{{ 's' if freq.respondent_count != 1 else '' }}</span>
+                            <div class="w-16 bg-gray-200 rounded-full h-2">
+                                <div class="bg-survey-purple h-2 rounded-full" 
+                                     style="width: {{ (freq.respondent_count / respondent_analysis.response_frequency[0].respondent_count * 100) }}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-sm text-gray-500">No frequency data available</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="bg-white rounded-lg shadow-md">
+    <div class="px-6 py-4 border-b border-gray-200">
+        <h3 class="text-lg font-semibold text-gray-900">
+            <i class="fas fa-bolt text-survey-orange mr-2"></i>
+            Quick Actions
+        </h3>
+    </div>
+    <div class="p-6">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <a href="{{ url_for('survey_analytics') }}" 
+               class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-4">
+                    <i class="fas fa-chart-bar text-blue-600"></i>
+                </div>
+                <div>
+                    <h4 class="font-medium text-gray-900">Detailed Analytics</h4>
+                    <p class="text-sm text-gray-500">Question-level analysis and trends</p>
+                </div>
+            </a>
+            
+            <a href="{{ url_for('survey_responses') }}" 
+               class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                <div class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mr-4">
+                    <i class="fas fa-users text-green-600"></i>
+                </div>
+                <div>
+                    <h4 class="font-medium text-gray-900">Response Activity</h4>
+                    <p class="text-sm text-gray-500">Who responded and when</p>
+                </div>
+            </a>
+            
+            <button onclick="refreshData()" 
+                    class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center mr-4">
+                    <i class="fas fa-sync-alt text-purple-600"></i>
+                </div>
+                <div>
+                    <h4 class="font-medium text-gray-900">Refresh Data</h4>
+                    <p class="text-sm text-gray-500">Update analytics from source</p>
+                </div>
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function refreshData() {
+        showNotification('Refreshing survey analytics...', 'info');
+        location.reload();
+    }
+    
+    // Auto-refresh every 5 minutes
+    setInterval(function() {
+        console.log('Auto-refreshing survey analytics...');
+        location.reload();
+    }, 300000); // 5 minutes
+</script>
+{% endblock %}

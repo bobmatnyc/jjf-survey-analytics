@@ -1,0 +1,369 @@
+{% extends "base.html" %}
+
+{% block title %}{{ spreadsheet.title }} - Surveyor Data Viewer{% endblock %}
+
+{% block header %}
+<div class="mb-8">
+    <div class="flex items-center mb-4">
+        <a href="{{ url_for('spreadsheets') }}" 
+           class="text-gray-500 hover:text-gray-700 transition-colors mr-4">
+            <i class="fas fa-arrow-left text-lg"></i>
+        </a>
+        <div class="flex items-center">
+            <div class="w-12 h-12 rounded-lg flex items-center justify-center text-white text-lg font-bold mr-4
+                {% if spreadsheet.sheet_type == 'survey' %}bg-survey-blue
+                {% elif spreadsheet.sheet_type == 'assessment' %}bg-survey-green
+                {% elif spreadsheet.sheet_type == 'inventory' %}bg-survey-purple
+                {% else %}bg-gray-400{% endif %}">
+                {% if spreadsheet.sheet_type == 'survey' %}<i class="fas fa-poll"></i>
+                {% elif spreadsheet.sheet_type == 'assessment' %}<i class="fas fa-clipboard-check"></i>
+                {% elif spreadsheet.sheet_type == 'inventory' %}<i class="fas fa-boxes"></i>
+                {% else %}<i class="fas fa-file"></i>{% endif %}
+            </div>
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900">{{ spreadsheet.title }}</h1>
+                <div class="flex items-center space-x-4 mt-2">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize
+                        {% if spreadsheet.sheet_type == 'survey' %}bg-blue-100 text-blue-800
+                        {% elif spreadsheet.sheet_type == 'assessment' %}bg-green-100 text-green-800
+                        {% elif spreadsheet.sheet_type == 'inventory' %}bg-purple-100 text-purple-800
+                        {% else %}bg-gray-100 text-gray-800{% endif %}">
+                        {{ spreadsheet.sheet_type or 'unknown' }}
+                    </span>
+                    <span class="text-sm text-gray-500 font-mono">{{ spreadsheet.spreadsheet_id|truncate_id }}</span>
+                    <span class="text-sm text-gray-500">Last synced: {{ spreadsheet.last_synced|datetime }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Action Buttons -->
+    <div class="flex space-x-3">
+        <a href="{{ spreadsheet.url }}" 
+           target="_blank"
+           class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors">
+            <i class="fas fa-external-link-alt mr-2"></i>
+            Open in Google Sheets
+        </a>
+        <button onclick="copySpreadsheetId('{{ spreadsheet.spreadsheet_id }}')"
+                class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors">
+            <i class="fas fa-copy mr-2"></i>
+            Copy ID
+        </button>
+        <button onclick="exportData()"
+                class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors">
+            <i class="fas fa-download mr-2"></i>
+            Export CSV
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Data Summary -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <div class="flex items-center">
+            <div class="flex-shrink-0">
+                <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-list-ol text-blue-600"></i>
+                </div>
+            </div>
+            <div class="ml-4">
+                <p class="text-sm font-medium text-gray-500">Total Rows</p>
+                <p class="text-2xl font-bold text-gray-900">{{ pagination.total_rows }}</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <div class="flex items-center">
+            <div class="flex-shrink-0">
+                <div class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-columns text-green-600"></i>
+                </div>
+            </div>
+            <div class="ml-4">
+                <p class="text-sm font-medium text-gray-500">Columns</p>
+                <p class="text-2xl font-bold text-gray-900">{{ columns|length }}</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <div class="flex items-center">
+            <div class="flex-shrink-0">
+                <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-eye text-purple-600"></i>
+                </div>
+            </div>
+            <div class="ml-4">
+                <p class="text-sm font-medium text-gray-500">Viewing</p>
+                <p class="text-2xl font-bold text-gray-900">{{ data|length }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Data Table -->
+{% if data %}
+<div class="bg-white rounded-lg shadow-md overflow-hidden">
+    <!-- Table Header -->
+    <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+        <div class="flex justify-between items-center">
+            <h3 class="text-lg font-semibold text-gray-900">
+                <i class="fas fa-table mr-2"></i>
+                Data Rows
+            </h3>
+            <div class="flex items-center space-x-4">
+                <!-- Rows per page selector -->
+                <div class="flex items-center space-x-2">
+                    <label for="perPageSelect" class="text-sm text-gray-600">Rows per page:</label>
+                    <select id="perPageSelect" 
+                            onchange="changePerPage(this.value)"
+                            class="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-survey-blue">
+                        <option value="10" {% if pagination.per_page == 10 %}selected{% endif %}>10</option>
+                        <option value="20" {% if pagination.per_page == 20 %}selected{% endif %}>20</option>
+                        <option value="50" {% if pagination.per_page == 50 %}selected{% endif %}>50</option>
+                        <option value="100" {% if pagination.per_page == 100 %}selected{% endif %}>100</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Table -->
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 bg-gray-50 z-10">
+                        Row #
+                    </th>
+                    {% for column in columns %}
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <div class="flex items-center space-x-1">
+                            <span class="truncate max-w-xs" title="{{ column }}">{{ column }}</span>
+                            {% if column|length > 20 %}
+                            <i class="fas fa-info-circle text-gray-400 cursor-help" title="{{ column }}"></i>
+                            {% endif %}
+                        </div>
+                    </th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                {% for row in data %}
+                <tr class="table-row-hover">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 sticky left-0 bg-white z-10 border-r border-gray-200">
+                        {{ row._meta.row_number }}
+                    </td>
+                    {% for column in columns %}
+                    <td class="px-6 py-4 text-sm text-gray-900">
+                        <div class="max-w-xs">
+                            {% set value = row.get(column, '') %}
+                            {% if value %}
+                                {% if value|string|length > 100 %}
+                                <div class="truncate" title="{{ value }}">{{ value }}</div>
+                                <button onclick="showFullValue('{{ column }}', {{ loop.index0 }})" 
+                                        class="text-xs text-survey-blue hover:text-blue-700 mt-1">
+                                    Show full
+                                </button>
+                                {% else %}
+                                <div class="break-words">{{ value }}</div>
+                                {% endif %}
+                            {% else %}
+                            <span class="text-gray-400 italic">empty</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    <!-- Pagination -->
+    {% if pagination.total_pages > 1 %}
+    <div class="px-6 py-4 border-t border-gray-200 bg-gray-50">
+        <div class="flex items-center justify-between">
+            <div class="text-sm text-gray-700">
+                Showing {{ ((pagination.page - 1) * pagination.per_page) + 1 }} to 
+                {{ ((pagination.page - 1) * pagination.per_page) + data|length }} of 
+                {{ pagination.total_rows }} results
+            </div>
+            
+            <div class="flex items-center space-x-2">
+                <!-- Previous button -->
+                {% if pagination.has_prev %}
+                <a href="?page={{ pagination.prev_page }}&per_page={{ pagination.per_page }}"
+                   class="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors">
+                    <i class="fas fa-chevron-left mr-1"></i>
+                    Previous
+                </a>
+                {% else %}
+                <span class="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-400 bg-gray-100 cursor-not-allowed">
+                    <i class="fas fa-chevron-left mr-1"></i>
+                    Previous
+                </span>
+                {% endif %}
+                
+                <!-- Page numbers -->
+                <div class="flex items-center space-x-1">
+                    {% set start_page = [1, pagination.page - 2]|max %}
+                    {% set end_page = [pagination.total_pages, pagination.page + 2]|min %}
+                    
+                    {% if start_page > 1 %}
+                    <a href="?page=1&per_page={{ pagination.per_page }}" 
+                       class="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">1</a>
+                    {% if start_page > 2 %}
+                    <span class="px-2 text-gray-400">...</span>
+                    {% endif %}
+                    {% endif %}
+                    
+                    {% for page_num in range(start_page, end_page + 1) %}
+                    {% if page_num == pagination.page %}
+                    <span class="px-3 py-2 text-sm font-medium text-white bg-survey-blue rounded">{{ page_num }}</span>
+                    {% else %}
+                    <a href="?page={{ page_num }}&per_page={{ pagination.per_page }}" 
+                       class="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">{{ page_num }}</a>
+                    {% endif %}
+                    {% endfor %}
+                    
+                    {% if end_page < pagination.total_pages %}
+                    {% if end_page < pagination.total_pages - 1 %}
+                    <span class="px-2 text-gray-400">...</span>
+                    {% endif %}
+                    <a href="?page={{ pagination.total_pages }}&per_page={{ pagination.per_page }}" 
+                       class="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">{{ pagination.total_pages }}</a>
+                    {% endif %}
+                </div>
+                
+                <!-- Next button -->
+                {% if pagination.has_next %}
+                <a href="?page={{ pagination.next_page }}&per_page={{ pagination.per_page }}"
+                   class="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors">
+                    Next
+                    <i class="fas fa-chevron-right ml-1"></i>
+                </a>
+                {% else %}
+                <span class="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-400 bg-gray-100 cursor-not-allowed">
+                    Next
+                    <i class="fas fa-chevron-right ml-1"></i>
+                </span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+{% else %}
+<!-- No Data State -->
+<div class="bg-white rounded-lg shadow-md p-12 text-center">
+    <i class="fas fa-inbox text-gray-400 text-6xl mb-6"></i>
+    <h3 class="text-xl font-medium text-gray-900 mb-2">No data available</h3>
+    <p class="text-gray-500 mb-6">This spreadsheet doesn't contain any data rows</p>
+    <a href="{{ spreadsheet.url }}" 
+       target="_blank"
+       class="inline-flex items-center px-4 py-2 bg-survey-blue text-white rounded-md hover:bg-blue-700 transition-colors">
+        <i class="fas fa-external-link-alt mr-2"></i>
+        Open in Google Sheets
+    </a>
+</div>
+{% endif %}
+
+<!-- Full Value Modal -->
+<div id="fullValueModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-96 overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-lg font-semibold text-gray-900" id="modalTitle">Full Value</h3>
+                    <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="p-6 overflow-y-auto max-h-80">
+                <pre id="modalContent" class="whitespace-pre-wrap text-sm text-gray-900 bg-gray-50 p-4 rounded border"></pre>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Store data for modal display
+    const tableData = {{ data|tojson }};
+    
+    function changePerPage(perPage) {
+        const url = new URL(window.location);
+        url.searchParams.set('per_page', perPage);
+        url.searchParams.set('page', '1'); // Reset to first page
+        window.location.href = url.toString();
+    }
+    
+    function copySpreadsheetId(id) {
+        copyToClipboard(id);
+    }
+    
+    function exportData() {
+        // Create CSV content
+        const columns = {{ columns|tojson }};
+        const csvContent = [
+            columns.join(','),
+            ...tableData.map(row => 
+                columns.map(col => {
+                    const value = row[col] || '';
+                    // Escape quotes and wrap in quotes if contains comma or quote
+                    if (typeof value === 'string' && (value.includes(',') || value.includes('"') || value.includes('\n'))) {
+                        return '"' + value.replace(/"/g, '""') + '"';
+                    }
+                    return value;
+                }).join(',')
+            )
+        ].join('\n');
+        
+        // Download CSV
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = '{{ spreadsheet.title }}_data.csv';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        
+        showNotification('Data exported successfully!', 'success');
+    }
+    
+    function showFullValue(column, rowIndex) {
+        const value = tableData[rowIndex][column];
+        document.getElementById('modalTitle').textContent = `Full Value: ${column}`;
+        document.getElementById('modalContent').textContent = value;
+        document.getElementById('fullValueModal').classList.remove('hidden');
+    }
+    
+    function closeModal() {
+        document.getElementById('fullValueModal').classList.add('hidden');
+    }
+    
+    // Close modal on escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeModal();
+        }
+    });
+    
+    // Close modal on backdrop click
+    document.getElementById('fullValueModal').addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeModal();
+        }
+    });
+</script>
+{% endblock %}

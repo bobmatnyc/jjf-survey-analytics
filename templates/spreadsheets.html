@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+
+{% block title %}Spreadsheets - Surveyor Data Viewer{% endblock %}
+
+{% block header %}
+<div class="mb-8">
+    <div class="flex justify-between items-center">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">
+                <i class="fas fa-table text-survey-blue mr-3"></i>
+                Spreadsheets
+            </h1>
+            <p class="text-gray-600">Manage and view data from your Google Sheets</p>
+        </div>
+        <div class="flex space-x-3">
+            <button onclick="refreshData()" 
+                    class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors">
+                <i class="fas fa-sync-alt mr-2"></i>
+                Refresh
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Filter and Search Bar -->
+<div class="bg-white rounded-lg shadow-md p-6 mb-6">
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
+        <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4">
+            <!-- Search -->
+            <div class="relative">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <i class="fas fa-search text-gray-400"></i>
+                </div>
+                <input type="text" 
+                       id="searchInput"
+                       placeholder="Search spreadsheets..." 
+                       class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-survey-blue focus:border-survey-blue">
+            </div>
+            
+            <!-- Type Filter -->
+            <select id="typeFilter" 
+                    class="block w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-survey-blue focus:border-survey-blue">
+                <option value="">All Types</option>
+                <option value="survey">Survey</option>
+                <option value="assessment">Assessment</option>
+                <option value="inventory">Inventory</option>
+            </select>
+        </div>
+        
+        <!-- Results Count -->
+        <div class="text-sm text-gray-500">
+            <span id="resultsCount">{{ spreadsheets|length }}</span> spreadsheet(s) found
+        </div>
+    </div>
+</div>
+
+<!-- Spreadsheets Grid -->
+{% if spreadsheets %}
+<div id="spreadsheetsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    {% for sheet in spreadsheets %}
+    <div class="spreadsheet-card bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200" 
+         data-title="{{ sheet.title|lower }}" 
+         data-type="{{ sheet.sheet_type or '' }}">
+        <!-- Card Header -->
+        <div class="p-6 border-b border-gray-200">
+            <div class="flex items-start justify-between">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0 w-12 h-12 rounded-lg flex items-center justify-center text-white text-lg font-bold
+                        {% if sheet.sheet_type == 'survey' %}bg-survey-blue
+                        {% elif sheet.sheet_type == 'assessment' %}bg-survey-green
+                        {% elif sheet.sheet_type == 'inventory' %}bg-survey-purple
+                        {% else %}bg-gray-400{% endif %}">
+                        {% if sheet.sheet_type == 'survey' %}<i class="fas fa-poll"></i>
+                        {% elif sheet.sheet_type == 'assessment' %}<i class="fas fa-clipboard-check"></i>
+                        {% elif sheet.sheet_type == 'inventory' %}<i class="fas fa-boxes"></i>
+                        {% else %}<i class="fas fa-file"></i>{% endif %}
+                    </div>
+                    <div class="ml-4 flex-1">
+                        <h3 class="text-lg font-semibold text-gray-900 leading-tight">{{ sheet.title }}</h3>
+                        <p class="text-sm text-gray-500 font-mono mt-1">{{ sheet.spreadsheet_id|truncate_id }}</p>
+                    </div>
+                </div>
+                
+                <!-- Type Badge -->
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize
+                    {% if sheet.sheet_type == 'survey' %}bg-blue-100 text-blue-800
+                    {% elif sheet.sheet_type == 'assessment' %}bg-green-100 text-green-800
+                    {% elif sheet.sheet_type == 'inventory' %}bg-purple-100 text-purple-800
+                    {% else %}bg-gray-100 text-gray-800{% endif %}">
+                    {{ sheet.sheet_type or 'unknown' }}
+                </span>
+            </div>
+        </div>
+        
+        <!-- Card Body -->
+        <div class="p-6">
+            <!-- Stats -->
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div class="text-center">
+                    <div class="text-2xl font-bold text-gray-900">{{ sheet.row_count }}</div>
+                    <div class="text-sm text-gray-500">Data Rows</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-sm font-medium text-gray-900">
+                        {% if sheet.last_synced %}
+                            {{ sheet.last_synced|datetime }}
+                        {% else %}
+                            Never
+                        {% endif %}
+                    </div>
+                    <div class="text-sm text-gray-500">Last Synced</div>
+                </div>
+            </div>
+            
+            <!-- Progress Bar (if has data) -->
+            {% if sheet.row_count > 0 %}
+            <div class="mb-4">
+                <div class="flex justify-between text-sm text-gray-600 mb-1">
+                    <span>Data Available</span>
+                    <span>{{ sheet.row_count }} rows</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2">
+                    <div class="h-2 rounded-full
+                        {% if sheet.sheet_type == 'survey' %}bg-survey-blue
+                        {% elif sheet.sheet_type == 'assessment' %}bg-survey-green
+                        {% elif sheet.sheet_type == 'inventory' %}bg-survey-purple
+                        {% else %}bg-gray-400{% endif %}" 
+                         style="width: 100%"></div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Card Footer -->
+        <div class="px-6 py-4 bg-gray-50 border-t border-gray-200 rounded-b-lg">
+            <div class="flex justify-between items-center">
+                <div class="flex space-x-2">
+                    <button onclick="copySpreadsheetId('{{ sheet.spreadsheet_id }}')" 
+                            class="text-gray-500 hover:text-gray-700 transition-colors" 
+                            title="Copy Spreadsheet ID">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                    <a href="{{ sheet.url }}" 
+                       target="_blank" 
+                       class="text-gray-500 hover:text-gray-700 transition-colors" 
+                       title="Open in Google Sheets">
+                        <i class="fas fa-external-link-alt"></i>
+                    </a>
+                </div>
+                
+                <div class="flex space-x-2">
+                    {% if sheet.row_count > 0 %}
+                    <a href="{{ url_for('view_spreadsheet', spreadsheet_id=sheet.spreadsheet_id) }}" 
+                       class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-white
+                        {% if sheet.sheet_type == 'survey' %}bg-survey-blue hover:bg-blue-700
+                        {% elif sheet.sheet_type == 'assessment' %}bg-survey-green hover:bg-green-700
+                        {% elif sheet.sheet_type == 'inventory' %}bg-survey-purple hover:bg-purple-700
+                        {% else %}bg-gray-500 hover:bg-gray-600{% endif %} transition-colors">
+                        <i class="fas fa-eye mr-1"></i>
+                        View Data
+                    </a>
+                    {% else %}
+                    <span class="inline-flex items-center px-3 py-1.5 text-xs font-medium text-gray-500 bg-gray-100 rounded cursor-not-allowed">
+                        <i class="fas fa-ban mr-1"></i>
+                        No Data
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- No Results Message -->
+<div id="noResults" class="hidden text-center py-12">
+    <i class="fas fa-search text-gray-400 text-4xl mb-4"></i>
+    <h3 class="text-lg font-medium text-gray-900 mb-2">No spreadsheets found</h3>
+    <p class="text-gray-500">Try adjusting your search or filter criteria</p>
+</div>
+
+{% else %}
+<!-- Empty State -->
+<div class="text-center py-12">
+    <i class="fas fa-table text-gray-400 text-6xl mb-6"></i>
+    <h3 class="text-xl font-medium text-gray-900 mb-2">No spreadsheets available</h3>
+    <p class="text-gray-500 mb-6">Run the data extractor to import Google Sheets data</p>
+    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
+        <div class="flex items-center">
+            <i class="fas fa-info-circle text-blue-500 mr-3"></i>
+            <div class="text-left">
+                <p class="text-sm font-medium text-blue-800">Getting Started</p>
+                <p class="text-sm text-blue-600">Run <code class="bg-blue-100 px-1 rounded">python improved_extractor.py</code> to extract data</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Search and filter functionality
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchInput = document.getElementById('searchInput');
+        const typeFilter = document.getElementById('typeFilter');
+        const spreadsheetsContainer = document.getElementById('spreadsheetsContainer');
+        const noResults = document.getElementById('noResults');
+        const resultsCount = document.getElementById('resultsCount');
+        
+        function filterSpreadsheets() {
+            const searchTerm = searchInput.value.toLowerCase();
+            const selectedType = typeFilter.value;
+            const cards = document.querySelectorAll('.spreadsheet-card');
+            let visibleCount = 0;
+            
+            cards.forEach(card => {
+                const title = card.dataset.title;
+                const type = card.dataset.type;
+                
+                const matchesSearch = title.includes(searchTerm);
+                const matchesType = !selectedType || type === selectedType;
+                
+                if (matchesSearch && matchesType) {
+                    card.style.display = 'block';
+                    visibleCount++;
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+            
+            // Update results count
+            resultsCount.textContent = visibleCount;
+            
+            // Show/hide no results message
+            if (visibleCount === 0 && cards.length > 0) {
+                if (spreadsheetsContainer) spreadsheetsContainer.style.display = 'none';
+                if (noResults) noResults.classList.remove('hidden');
+            } else {
+                if (spreadsheetsContainer) spreadsheetsContainer.style.display = 'grid';
+                if (noResults) noResults.classList.add('hidden');
+            }
+        }
+        
+        // Event listeners
+        if (searchInput) {
+            searchInput.addEventListener('input', filterSpreadsheets);
+        }
+        
+        if (typeFilter) {
+            typeFilter.addEventListener('change', filterSpreadsheets);
+        }
+    });
+    
+    // Utility functions
+    function copySpreadsheetId(id) {
+        copyToClipboard(id);
+    }
+    
+    function refreshData() {
+        showNotification('Refreshing data...', 'info');
+        location.reload();
+    }
+</script>
+{% endblock %}

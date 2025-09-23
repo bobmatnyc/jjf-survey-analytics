@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+
+{% block title %}Extraction Jobs - Surveyor Data Viewer{% endblock %}
+
+{% block header %}
+<div class="mb-8">
+    <h1 class="text-3xl font-bold text-gray-900 mb-2">
+        <i class="fas fa-cogs text-survey-blue mr-3"></i>
+        Extraction Jobs
+    </h1>
+    <p class="text-gray-600">Monitor and review data extraction job history</p>
+</div>
+{% endblock %}
+
+{% block content %}
+{% if jobs %}
+<!-- Jobs List -->
+<div class="space-y-6">
+    {% for job in jobs %}
+    <div class="bg-white rounded-lg shadow-md overflow-hidden">
+        <!-- Job Header -->
+        <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+            <div class="flex justify-between items-center">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center text-white
+                        {% if job.status == 'completed' %}bg-green-500
+                        {% elif job.status == 'failed' %}bg-red-500
+                        {% elif job.status == 'running' %}bg-yellow-500
+                        {% else %}bg-gray-500{% endif %}">
+                        {% if job.status == 'completed' %}<i class="fas fa-check"></i>
+                        {% elif job.status == 'failed' %}<i class="fas fa-times"></i>
+                        {% elif job.status == 'running' %}<i class="fas fa-spinner fa-spin"></i>
+                        {% else %}<i class="fas fa-question"></i>{% endif %}
+                    </div>
+                    <div class="ml-4">
+                        <h3 class="text-lg font-semibold text-gray-900">{{ job.job_name }}</h3>
+                        <p class="text-sm text-gray-500">Job ID: {{ job.id }}</p>
+                    </div>
+                </div>
+                
+                <div class="flex items-center space-x-4">
+                    <!-- Status Badge -->
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium
+                        {% if job.status == 'completed' %}bg-green-100 text-green-800
+                        {% elif job.status == 'failed' %}bg-red-100 text-red-800
+                        {% elif job.status == 'running' %}bg-yellow-100 text-yellow-800
+                        {% else %}bg-gray-100 text-gray-800{% endif %}">
+                        {% if job.status == 'completed' %}<i class="fas fa-check-circle mr-1"></i>
+                        {% elif job.status == 'failed' %}<i class="fas fa-exclamation-circle mr-1"></i>
+                        {% elif job.status == 'running' %}<i class="fas fa-clock mr-1"></i>
+                        {% else %}<i class="fas fa-question-circle mr-1"></i>{% endif %}
+                        {{ job.status|title }}
+                    </span>
+                    
+                    <!-- Duration -->
+                    {% if job.started_at and job.completed_at %}
+                    <span class="text-sm text-gray-500">
+                        <i class="fas fa-stopwatch mr-1"></i>
+                        Duration: Completed
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Job Details -->
+        <div class="px-6 py-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <!-- Progress Stats -->
+                <div class="text-center">
+                    <div class="text-2xl font-bold text-gray-900">{{ job.successful_spreadsheets }}/{{ job.total_spreadsheets }}</div>
+                    <div class="text-sm text-gray-500">Spreadsheets</div>
+                    <div class="w-full bg-gray-200 rounded-full h-2 mt-2">
+                        <div class="h-2 rounded-full bg-green-500" 
+                             style="width: {{ (job.successful_spreadsheets / job.total_spreadsheets * 100) if job.total_spreadsheets > 0 else 0 }}%"></div>
+                    </div>
+                </div>
+                
+                <div class="text-center">
+                    <div class="text-2xl font-bold text-gray-900">{{ job.total_rows }}</div>
+                    <div class="text-sm text-gray-500">Total Rows</div>
+                    <div class="text-xs text-gray-400 mt-1">
+                        {% if job.total_rows > 0 %}
+                        {{ "%.1f"|format(job.total_rows / job.successful_spreadsheets if job.successful_spreadsheets > 0 else 0) }} avg/sheet
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="text-center">
+                    <div class="text-2xl font-bold text-gray-900">{{ job.started_at|datetime }}</div>
+                    <div class="text-sm text-gray-500">Started</div>
+                    <div class="text-xs text-gray-400 mt-1">
+                        Recently
+                    </div>
+                </div>
+                
+                <div class="text-center">
+                    {% if job.completed_at %}
+                    <div class="text-2xl font-bold text-gray-900">{{ job.completed_at|datetime }}</div>
+                    <div class="text-sm text-gray-500">Completed</div>
+                    {% else %}
+                    <div class="text-2xl font-bold text-yellow-600">
+                        {% if job.status == 'running' %}
+                        <i class="fas fa-spinner fa-spin"></i>
+                        {% else %}
+                        <i class="fas fa-minus"></i>
+                        {% endif %}
+                    </div>
+                    <div class="text-sm text-gray-500">
+                        {% if job.status == 'running' %}Running{% else %}Not completed{% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Error Message -->
+            {% if job.error_message %}
+            <div class="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <div class="flex items-start">
+                    <i class="fas fa-exclamation-triangle text-red-500 mt-0.5 mr-3"></i>
+                    <div>
+                        <h4 class="text-sm font-medium text-red-800">Error Details</h4>
+                        <p class="text-sm text-red-700 mt-1 font-mono">{{ job.error_message }}</p>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Success Rate Visualization -->
+            {% if job.total_spreadsheets > 0 %}
+            <div class="mt-4">
+                <div class="flex justify-between text-sm text-gray-600 mb-2">
+                    <span>Success Rate</span>
+                    <span>{{ "%.1f"|format((job.successful_spreadsheets / job.total_spreadsheets * 100)) }}%</span>
+                </div>
+                <div class="flex rounded-full overflow-hidden h-3 bg-gray-200">
+                    <div class="bg-green-500" 
+                         style="width: {{ (job.successful_spreadsheets / job.total_spreadsheets * 100) }}%"></div>
+                    <div class="bg-red-500" 
+                         style="width: {{ ((job.total_spreadsheets - job.successful_spreadsheets) / job.total_spreadsheets * 100) }}%"></div>
+                </div>
+                <div class="flex justify-between text-xs text-gray-500 mt-1">
+                    <span>{{ job.successful_spreadsheets }} successful</span>
+                    <span>{{ job.total_spreadsheets - job.successful_spreadsheets }} failed</span>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Job Actions -->
+        <div class="px-6 py-3 bg-gray-50 border-t border-gray-200">
+            <div class="flex justify-between items-center">
+                <div class="text-sm text-gray-500">
+                    <i class="fas fa-clock mr-1"></i>
+                    Job {{ job.id }} • {{ job.job_name }}
+                </div>
+                <div class="flex space-x-2">
+                    {% if job.status == 'completed' %}
+                    <button onclick="copyJobDetails({{ job.id }})" 
+                            class="text-sm text-gray-600 hover:text-gray-800 transition-colors">
+                        <i class="fas fa-copy mr-1"></i>Copy Details
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Pagination would go here if needed -->
+
+{% else %}
+<!-- Empty State -->
+<div class="bg-white rounded-lg shadow-md p-12 text-center">
+    <i class="fas fa-cogs text-gray-400 text-6xl mb-6"></i>
+    <h3 class="text-xl font-medium text-gray-900 mb-2">No extraction jobs found</h3>
+    <p class="text-gray-500 mb-6">Run the data extractor to see job history and progress</p>
+    
+    <div class="bg-blue-50 border border-blue-200 rounded-lg p-6 max-w-md mx-auto">
+        <div class="flex items-start">
+            <i class="fas fa-info-circle text-blue-500 mt-1 mr-3"></i>
+            <div class="text-left">
+                <h4 class="text-sm font-medium text-blue-800 mb-2">Getting Started</h4>
+                <p class="text-sm text-blue-600 mb-3">To extract data from Google Sheets, run:</p>
+                <code class="block bg-blue-100 text-blue-800 px-3 py-2 rounded text-sm font-mono">
+                    python improved_extractor.py
+                </code>
+                <p class="text-xs text-blue-500 mt-2">This will create extraction jobs that you can monitor here.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function copyJobDetails(jobId) {
+        // Find the job data
+        const jobElement = document.querySelector(`[data-job-id="${jobId}"]`);
+        if (!jobElement) {
+            showNotification('Job details not found', 'error');
+            return;
+        }
+        
+        // Create a summary of job details
+        const jobData = {
+            id: jobId,
+            timestamp: new Date().toISOString(),
+            // Add more job details as needed
+        };
+        
+        const summary = `Job ${jobId} Details:\n${JSON.stringify(jobData, null, 2)}`;
+        copyToClipboard(summary);
+    }
+    
+    // Auto-refresh for running jobs
+    document.addEventListener('DOMContentLoaded', function() {
+        const runningJobs = document.querySelectorAll('[data-status="running"]');
+        
+        if (runningJobs.length > 0) {
+            // Refresh every 30 seconds if there are running jobs
+            setInterval(function() {
+                location.reload();
+            }, 30000);
+            
+            showNotification(`${runningJobs.length} job(s) still running. Page will auto-refresh.`, 'info');
+        }
+    });
+</script>
+{% endblock %}
