@@ -238,10 +238,30 @@ class DatabaseManager:
                         ORDER BY started_at DESC
                         LIMIT 1
                     ''')
-                    latest_job = cursor.fetchone()
-                    latest_job = dict(latest_job) if latest_job else None
+                    latest_job_row = cursor.fetchone()
+                    if latest_job_row:
+                        latest_job = dict(latest_job_row)
+                        # Ensure all required fields exist for template
+                        required_job_fields = {
+                            'id': latest_job.get('id', 0),
+                            'job_name': latest_job.get('job_name', latest_job.get('job_type', 'Unknown Job')),
+                            'status': latest_job.get('status', 'unknown'),
+                            'total_spreadsheets': latest_job.get('total_spreadsheets', latest_job.get('records_processed', 0)),
+                            'processed_spreadsheets': latest_job.get('processed_spreadsheets', latest_job.get('records_processed', 0)),
+                            'successful_spreadsheets': latest_job.get('successful_spreadsheets', latest_job.get('records_processed', 0)),
+                            'total_rows': latest_job.get('total_rows', 0),
+                            'processed_rows': latest_job.get('processed_rows', 0),
+                            'started_at': latest_job.get('started_at', ''),
+                            'completed_at': latest_job.get('completed_at', ''),
+                            'error_message': latest_job.get('error_message', None)
+                        }
+                        latest_job = required_job_fields
+                        logger.info(f"✅ Latest job normalized: {latest_job}")
+                    else:
+                        latest_job = None
                 except Exception as e:
                     logger.warning(f"Could not get latest job: {e}")
+                    latest_job = None
 
                 try:
                     # Sheet type distribution
@@ -331,24 +351,68 @@ def logout():
 def dashboard():
     """Dashboard with overview statistics."""
     try:
-        stats = db.get_dashboard_stats()
-        spreadsheets = db.get_spreadsheets()
+        # Force a safe stats object for Railway
+        try:
+            stats = db.get_dashboard_stats()
+            logger.info(f"✅ Dashboard stats retrieved: {type(stats)}")
+            logger.info(f"✅ Dashboard stats content: {stats}")
+        except Exception as db_error:
+            logger.error(f"❌ Database error in dashboard: {db_error}")
+            # Force safe default stats
+            stats = {
+                'total_spreadsheets': 0,
+                'total_rows': 0,
+                'total_jobs': 0,
+                'latest_job': None,
+                'sheet_types': []
+            }
+            logger.info(f"✅ Using default stats: {stats}")
 
-        # Debug logging for Railway
-        logger.info(f"Dashboard stats type: {type(stats)}")
-        logger.info(f"Dashboard stats keys: {list(stats.keys()) if isinstance(stats, dict) else 'Not a dict'}")
-        if isinstance(stats, dict) and 'total_spreadsheets' in stats:
-            logger.info(f"total_spreadsheets value: {stats['total_spreadsheets']}")
-        else:
-            logger.error(f"Missing total_spreadsheets in stats: {stats}")
+        # Double-check stats structure
+        if not isinstance(stats, dict):
+            logger.error(f"❌ Stats is not a dict: {type(stats)} = {stats}")
+            stats = {
+                'total_spreadsheets': 0,
+                'total_rows': 0,
+                'total_jobs': 0,
+                'latest_job': None,
+                'sheet_types': []
+            }
+
+        # Ensure all required keys exist
+        required_keys = ['total_spreadsheets', 'total_rows', 'total_jobs', 'latest_job', 'sheet_types']
+        for key in required_keys:
+            if key not in stats:
+                logger.error(f"❌ Missing key '{key}' in stats, adding default")
+                stats[key] = 0 if key.startswith('total_') else (None if key == 'latest_job' else [])
+
+        logger.info(f"✅ Final stats for template: {stats}")
+
+        # Get spreadsheets safely
+        try:
+            spreadsheets = db.get_spreadsheets()
+            logger.info(f"✅ Retrieved {len(spreadsheets)} spreadsheets")
+        except Exception as ss_error:
+            logger.error(f"❌ Error getting spreadsheets: {ss_error}")
+            spreadsheets = []
 
         return render_template('dashboard.html', stats=stats, spreadsheets=spreadsheets)
+
     except Exception as e:
-        logger.error(f"Dashboard error: {str(e)}")
-        logger.error(f"Error type: {type(e)}")
+        logger.error(f"❌ Dashboard route error: {str(e)}")
+        logger.error(f"❌ Error type: {type(e)}")
         import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        return render_template('error.html', error=str(e)), 500
+        logger.error(f"❌ Traceback: {traceback.format_exc()}")
+
+        # Return a safe error page with minimal stats
+        safe_stats = {
+            'total_spreadsheets': 0,
+            'total_rows': 0,
+            'total_jobs': 0,
+            'latest_job': None,
+            'sheet_types': []
+        }
+        return render_template('dashboard.html', stats=safe_stats, spreadsheets=[]), 200
 
 @app.route('/spreadsheets')
 @require_auth
