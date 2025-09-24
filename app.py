@@ -41,9 +41,8 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'surveyor-data-viewer-2025-de
 APP_PASSWORD = os.getenv('APP_PASSWORD', 'survey2025!')  # Default password, change in production
 REQUIRE_AUTH = os.getenv('REQUIRE_AUTH', 'true').lower() == 'true'
 
-# Port configuration
-DEFAULT_PORT = 5001
-PORT = int(os.getenv('PORT', DEFAULT_PORT))
+# Port configuration - Railway assigns this dynamically
+PORT = int(os.getenv('PORT', 8080))  # Railway compatible default
 
 logger.info(f"App configuration:")
 logger.info(f"  Port: {PORT}")

@@ -1,4 +1,14 @@
 [deploy]
 healthcheckPath = "/health"
-healthcheckTimeout = 30
-healthcheckInterval = 15
+healthcheckTimeout = 60
+healthcheckInterval = 30
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+[environments.production]
+variables = {
+  LOG_LEVEL = "INFO",
+  RAILWAY_ENVIRONMENT = "production",
+  REQUIRE_AUTH = "false",
+  PYTHONUNBUFFERED = "1"
+}
