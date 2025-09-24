@@ -1228,7 +1228,7 @@ def manual_import_data():
         results = {
             'status': 'started',
             'timestamp': datetime.now().isoformat(),
-            'environment': 'railway' if is_railway else 'local',
+            'environment': 'railway' if os.getenv('RAILWAY_ENVIRONMENT') else 'local',
             'files_found': [],
             'current_dir': os.getcwd(),
             'files_in_dir': os.listdir('.'),
