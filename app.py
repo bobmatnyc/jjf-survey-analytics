@@ -199,50 +199,83 @@ class DatabaseManager:
     
     def get_dashboard_stats(self) -> Dict:
         """Get dashboard statistics."""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            
-            # Total spreadsheets
-            cursor.execute('SELECT COUNT(*) as count FROM spreadsheets')
-            total_spreadsheets = cursor.fetchone()['count']
-            
-            # Total rows
-            cursor.execute('SELECT COUNT(*) as count FROM raw_data')
-            total_rows = cursor.fetchone()['count']
-            
-            # Total jobs
-            cursor.execute('SELECT COUNT(*) as count FROM extraction_jobs')
-            total_jobs = cursor.fetchone()['count']
-            
-            # Latest job
-            cursor.execute('''
-                SELECT * FROM extraction_jobs 
-                ORDER BY started_at DESC 
-                LIMIT 1
-            ''')
-            latest_job = cursor.fetchone()
-            latest_job = dict(latest_job) if latest_job else None
-            
-            # Sheet type distribution
-            cursor.execute('''
-                SELECT 
-                    sheet_type,
-                    COUNT(*) as count,
-                    SUM(CASE WHEN r.spreadsheet_id IS NOT NULL THEN 1 ELSE 0 END) as with_data
-                FROM spreadsheets s
-                LEFT JOIN (SELECT DISTINCT spreadsheet_id FROM raw_data) r 
-                    ON s.spreadsheet_id = r.spreadsheet_id
-                GROUP BY sheet_type
-                ORDER BY count DESC
-            ''')
-            sheet_types = [dict(row) for row in cursor.fetchall()]
-            
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+
+                # Initialize default values
+                total_spreadsheets = 0
+                total_rows = 0
+                total_jobs = 0
+                latest_job = None
+                sheet_types = []
+
+                try:
+                    # Total spreadsheets
+                    cursor.execute('SELECT COUNT(*) as count FROM spreadsheets')
+                    total_spreadsheets = cursor.fetchone()['count']
+                except Exception as e:
+                    logger.warning(f"Could not get spreadsheet count: {e}")
+
+                try:
+                    # Total rows
+                    cursor.execute('SELECT COUNT(*) as count FROM raw_data')
+                    total_rows = cursor.fetchone()['count']
+                except Exception as e:
+                    logger.warning(f"Could not get row count: {e}")
+
+                try:
+                    # Total jobs
+                    cursor.execute('SELECT COUNT(*) as count FROM extraction_jobs')
+                    total_jobs = cursor.fetchone()['count']
+                except Exception as e:
+                    logger.warning(f"Could not get job count: {e}")
+
+                try:
+                    # Latest job
+                    cursor.execute('''
+                        SELECT * FROM extraction_jobs
+                        ORDER BY started_at DESC
+                        LIMIT 1
+                    ''')
+                    latest_job = cursor.fetchone()
+                    latest_job = dict(latest_job) if latest_job else None
+                except Exception as e:
+                    logger.warning(f"Could not get latest job: {e}")
+
+                try:
+                    # Sheet type distribution
+                    cursor.execute('''
+                        SELECT
+                            sheet_type,
+                            COUNT(*) as count,
+                            SUM(CASE WHEN r.spreadsheet_id IS NOT NULL THEN 1 ELSE 0 END) as with_data
+                        FROM spreadsheets s
+                        LEFT JOIN (SELECT DISTINCT spreadsheet_id FROM raw_data) r
+                            ON s.spreadsheet_id = r.spreadsheet_id
+                        GROUP BY sheet_type
+                        ORDER BY count DESC
+                    ''')
+                    sheet_types = [dict(row) for row in cursor.fetchall()]
+                except Exception as e:
+                    logger.warning(f"Could not get sheet types: {e}")
+
+                return {
+                    'total_spreadsheets': total_spreadsheets,
+                    'total_rows': total_rows,
+                    'total_jobs': total_jobs,
+                    'latest_job': latest_job,
+                    'sheet_types': sheet_types
+                }
+        except Exception as e:
+            logger.error(f"Database error in get_dashboard_stats: {e}")
+            # Return default stats if database is not available
             return {
-                'total_spreadsheets': total_spreadsheets,
-                'total_rows': total_rows,
-                'total_jobs': total_jobs,
-                'latest_job': latest_job,
-                'sheet_types': sheet_types
+                'total_spreadsheets': 0,
+                'total_rows': 0,
+                'total_jobs': 0,
+                'latest_job': None,
+                'sheet_types': []
             }
 
 # Initialize database on Railway
@@ -300,8 +333,21 @@ def dashboard():
     try:
         stats = db.get_dashboard_stats()
         spreadsheets = db.get_spreadsheets()
+
+        # Debug logging for Railway
+        logger.info(f"Dashboard stats type: {type(stats)}")
+        logger.info(f"Dashboard stats keys: {list(stats.keys()) if isinstance(stats, dict) else 'Not a dict'}")
+        if isinstance(stats, dict) and 'total_spreadsheets' in stats:
+            logger.info(f"total_spreadsheets value: {stats['total_spreadsheets']}")
+        else:
+            logger.error(f"Missing total_spreadsheets in stats: {stats}")
+
         return render_template('dashboard.html', stats=stats, spreadsheets=spreadsheets)
     except Exception as e:
+        logger.error(f"Dashboard error: {str(e)}")
+        logger.error(f"Error type: {type(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return render_template('error.html', error=str(e)), 500
 
 @app.route('/spreadsheets')
