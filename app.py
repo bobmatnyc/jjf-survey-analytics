@@ -327,17 +327,35 @@ class DatabaseManager:
                         import json
                         data = json.loads(row['data_json']) if row['data_json'] else {}
 
-                        # Create a preview of the data (first few non-empty values)
+                        # Create a detailed preview of the data changes
                         preview_items = []
-                        for key, value in data.items():
-                            if value and str(value).strip() and len(preview_items) < 3:
-                                # Clean up the preview text
-                                preview_value = str(value).strip()
-                                if len(preview_value) > 50:
-                                    preview_value = preview_value[:47] + "..."
-                                preview_items.append(f"{key}: {preview_value}")
+                        key_value_pairs = []
 
-                        preview = " | ".join(preview_items) if preview_items else "No data preview available"
+                        for key, value in data.items():
+                            if value and str(value).strip():
+                                clean_value = str(value).strip()
+                                # Store full key-value pairs for detailed view
+                                key_value_pairs.append({
+                                    'key': key,
+                                    'value': clean_value,
+                                    'truncated': len(clean_value) > 100
+                                })
+
+                                # Create preview (shorter for overview)
+                                if len(preview_items) < 4:
+                                    if len(clean_value) > 60:
+                                        preview_value = clean_value[:57] + "..."
+                                    else:
+                                        preview_value = clean_value
+
+                                    # Clean up field names for display
+                                    display_key = key.replace('_', ' ').title()
+                                    if len(display_key) > 20:
+                                        display_key = display_key[:17] + "..."
+
+                                    preview_items.append(f"**{display_key}**: {preview_value}")
+
+                        preview = " • ".join(preview_items) if preview_items else "No data available"
 
                         updates.append({
                             'id': row['id'],
@@ -347,7 +365,10 @@ class DatabaseManager:
                             'row_number': row['row_number'],
                             'created_at': row['created_at'],
                             'preview': preview,
-                            'data_count': len([v for v in data.values() if v and str(v).strip()])
+                            'data_count': len([v for v in data.values() if v and str(v).strip()]),
+                            'key_value_pairs': key_value_pairs[:8],  # Limit to first 8 fields for performance
+                            'spreadsheet_url': f"https://docs.google.com/spreadsheets/d/{row['spreadsheet_id']}/edit",
+                            'has_more_data': len(key_value_pairs) > 8
                         })
                     except Exception as e:
                         logger.warning(f"Error processing update row {row['id']}: {e}")

@@ -201,13 +201,64 @@
                             <span class="text-xs text-gray-500">{{ update.data_count }} fields</span>
                         </div>
 
-                        <p class="text-sm font-medium text-gray-900 truncate mb-1">
-                            {{ update.spreadsheet_title }}
-                        </p>
+                        <div class="flex items-center justify-between mb-1">
+                            <p class="text-sm font-medium text-gray-900 truncate flex-1">
+                                {{ update.spreadsheet_title }}
+                            </p>
+                            <a href="{{ update.spreadsheet_url }}" target="_blank"
+                               class="ml-2 text-survey-blue hover:text-survey-blue-dark text-xs flex-shrink-0"
+                               title="Open in Google Sheets">
+                                <i class="fas fa-external-link-alt"></i>
+                            </a>
+                        </div>
 
-                        <p class="text-xs text-gray-600 line-clamp-2">
-                            {{ update.preview }}
-                        </p>
+                        <!-- Data Changes Preview -->
+                        <div class="text-xs text-gray-600 space-y-1">
+                            {% if update.key_value_pairs %}
+                                <div class="bg-gray-50 rounded p-2 space-y-1">
+                                    <p class="font-medium text-gray-700 mb-1">Data Added:</p>
+                                    {% for pair in update.key_value_pairs[:3] %}
+                                    <div class="flex">
+                                        <span class="font-medium text-gray-600 min-w-0 flex-shrink-0 mr-2">{{ pair.key|truncate(15) }}:</span>
+                                        <span class="text-gray-800 min-w-0 flex-1 break-words">
+                                            {% if pair.value|length > 80 %}
+                                                {{ pair.value[:77] }}...
+                                            {% else %}
+                                                {{ pair.value }}
+                                            {% endif %}
+                                        </span>
+                                    </div>
+                                    {% endfor %}
+                                    {% if update.key_value_pairs|length > 3 %}
+                                    <p class="text-gray-500 italic">+ {{ update.key_value_pairs|length - 3 }} more fields</p>
+                                    {% endif %}
+                                </div>
+                            {% else %}
+                                <p class="italic text-gray-500">No data preview available</p>
+                            {% endif %}
+
+                            <!-- Expandable Details -->
+                            {% if update.key_value_pairs|length > 3 %}
+                            <div class="mt-2">
+                                <button onclick="toggleDetails('update-{{ update.id }}')"
+                                        class="text-survey-blue hover:text-survey-blue-dark text-xs font-medium">
+                                    <i class="fas fa-chevron-down mr-1" id="icon-update-{{ update.id }}"></i>
+                                    View All {{ update.data_count }} Fields
+                                </button>
+                                <div id="details-update-{{ update.id }}" class="hidden mt-2 bg-gray-50 rounded p-2 space-y-1 max-h-32 overflow-y-auto">
+                                    {% for pair in update.key_value_pairs %}
+                                    <div class="flex text-xs">
+                                        <span class="font-medium text-gray-600 min-w-0 flex-shrink-0 mr-2">{{ pair.key }}:</span>
+                                        <span class="text-gray-800 min-w-0 flex-1 break-words">{{ pair.value }}</span>
+                                    </div>
+                                    {% endfor %}
+                                    {% if update.has_more_data %}
+                                    <p class="text-gray-500 italic text-xs">... and more fields</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
                     </div>
 
                     <div class="flex-shrink-0 ml-4">
@@ -332,5 +383,21 @@
             })
             .catch(error => console.error('Error updating stats:', error));
     }, 300000); // 5 minutes
+
+    // Toggle details for latest updates
+    function toggleDetails(updateId) {
+        const details = document.getElementById('details-' + updateId);
+        const icon = document.getElementById('icon-' + updateId);
+
+        if (details.classList.contains('hidden')) {
+            details.classList.remove('hidden');
+            icon.classList.remove('fa-chevron-down');
+            icon.classList.add('fa-chevron-up');
+        } else {
+            details.classList.add('hidden');
+            icon.classList.remove('fa-chevron-up');
+            icon.classList.add('fa-chevron-down');
+        }
+    }
 </script>
 {% endblock %}
