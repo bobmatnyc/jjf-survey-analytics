@@ -1346,6 +1346,126 @@ def check_schema():
             'timestamp': datetime.now().isoformat()
         }), 500
 
+@app.route('/fix-data-schema')
+def fix_data_schema():
+    """Fix the raw_data schema and import data properly."""
+    try:
+        import sqlite3
+        import json
+
+        results = {
+            'status': 'started',
+            'timestamp': datetime.now().isoformat(),
+            'steps': []
+        }
+
+        # Step 1: Check current Railway schema
+        with sqlite3.connect('surveyor_data_improved.db') as conn:
+            cursor = conn.cursor()
+
+            # Check current schema
+            cursor.execute("PRAGMA table_info(raw_data)")
+            current_columns = [col[1] for col in cursor.fetchall()]
+            results['steps'].append(f"Current Railway schema: {current_columns}")
+
+            # Check if we need to migrate schema
+            expected_columns = ['row_number', 'data_json', 'data_hash']
+            needs_migration = not all(col in current_columns for col in expected_columns)
+
+            if needs_migration:
+                results['steps'].append("Schema migration needed")
+
+                # Step 2: Create new table with correct schema
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS raw_data_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        spreadsheet_id TEXT NOT NULL,
+                        row_number INTEGER NOT NULL,
+                        data_json TEXT NOT NULL,
+                        data_hash TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (spreadsheet_id) REFERENCES spreadsheets (id)
+                    )
+                ''')
+                results['steps'].append("Created new raw_data table with correct schema")
+
+                # Step 3: Copy existing data if any
+                cursor.execute("SELECT COUNT(*) FROM raw_data")
+                existing_count = cursor.fetchone()[0]
+                if existing_count > 0:
+                    # Try to migrate existing data
+                    cursor.execute("SELECT * FROM raw_data")
+                    existing_rows = cursor.fetchall()
+                    migrated = 0
+                    for row in existing_rows:
+                        try:
+                            # Map old schema to new schema
+                            cursor.execute('''
+                                INSERT INTO raw_data_new (spreadsheet_id, row_number, data_json, created_at)
+                                VALUES (?, 1, ?, ?)
+                            ''', (row[1], row[3] or '{}', row[4]))  # spreadsheet_id, row_data as data_json, extracted_at
+                            migrated += 1
+                        except Exception as e:
+                            results['steps'].append(f"Migration warning: {e}")
+                    results['steps'].append(f"Migrated {migrated} existing rows")
+
+                # Step 4: Replace old table
+                cursor.execute("DROP TABLE raw_data")
+                cursor.execute("ALTER TABLE raw_data_new RENAME TO raw_data")
+                results['steps'].append("Replaced old table with new schema")
+
+                conn.commit()
+            else:
+                results['steps'].append("Schema already correct")
+
+        # Step 5: Import data from SQL file
+        if os.path.exists('railway_data_import.sql'):
+            with sqlite3.connect('surveyor_data_improved.db') as conn:
+                cursor = conn.cursor()
+
+                # Count before
+                cursor.execute("SELECT COUNT(*) FROM raw_data")
+                before_count = cursor.fetchone()[0]
+
+                # Import raw_data specifically
+                with open('railway_data_import.sql', 'r') as f:
+                    sql_content = f.read()
+
+                    # Extract only raw_data INSERT statements
+                    lines = sql_content.split('\n')
+                    raw_data_inserts = [line for line in lines if 'INSERT OR REPLACE INTO raw_data' in line]
+
+                    imported = 0
+                    errors = []
+                    for insert_stmt in raw_data_inserts:
+                        try:
+                            cursor.execute(insert_stmt)
+                            imported += 1
+                        except Exception as e:
+                            if len(errors) < 3:  # Only keep first 3 errors
+                                errors.append(str(e))
+
+                    conn.commit()
+
+                # Count after
+                cursor.execute("SELECT COUNT(*) FROM raw_data")
+                after_count = cursor.fetchone()[0]
+
+                results['steps'].append(f"Imported {imported} raw_data statements")
+                results['steps'].append(f"Raw data rows: {before_count} → {after_count}")
+                if errors:
+                    results['steps'].append(f"Import errors: {errors}")
+
+        results['status'] = 'completed'
+        return jsonify(results)
+
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'status': 'failed',
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
 @app.template_filter('datetime')
 def datetime_filter(value):
     """Format datetime strings."""
