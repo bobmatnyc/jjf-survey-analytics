@@ -245,6 +245,18 @@ class DatabaseManager:
                 'sheet_types': sheet_types
             }
 
+# Initialize database on Railway
+if os.getenv('RAILWAY_ENVIRONMENT'):
+    logger.info("🚂 Railway environment detected - initializing database...")
+    try:
+        from railway_init import railway_database_init
+        if railway_database_init():
+            logger.info("✅ Railway database initialization successful")
+        else:
+            logger.warning("⚠️ Railway database initialization had issues")
+    except Exception as e:
+        logger.error(f"❌ Railway database initialization failed: {e}")
+
 # Initialize database manager and analytics
 db = DatabaseManager()
 analytics = SurveyAnalytics(SURVEY_DB_PATH)
