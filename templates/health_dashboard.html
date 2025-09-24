@@ -1,0 +1,351 @@
+{% extends "base.html" %}
+
+{% block title %}Health Dashboard - JJF Survey Analytics{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900 mb-2">System Health Dashboard</h1>
+        <p class="text-gray-600">Monitor the health and status of all system components</p>
+    </div>
+
+    <!-- Overall Status -->
+    <div class="mb-8">
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-semibold text-gray-900">Overall System Status</h2>
+                <button onclick="refreshHealth()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg">
+                    <i class="fas fa-sync-alt mr-2"></i>Refresh
+                </button>
+            </div>
+            
+            <div id="overall-status" class="text-center py-8">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                <p class="text-gray-600">Loading health status...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Health Check Categories -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        <!-- API Keys & Authentication -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <div class="flex items-center mb-4">
+                <i class="fas fa-key text-blue-500 text-xl mr-3"></i>
+                <h3 class="text-lg font-semibold text-gray-900">API Keys & Auth</h3>
+            </div>
+            <div id="api-status" class="space-y-2">
+                <div class="animate-pulse bg-gray-200 h-4 rounded"></div>
+                <div class="animate-pulse bg-gray-200 h-4 rounded w-3/4"></div>
+            </div>
+        </div>
+
+        <!-- External Dependencies -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <div class="flex items-center mb-4">
+                <i class="fas fa-link text-green-500 text-xl mr-3"></i>
+                <h3 class="text-lg font-semibold text-gray-900">Dependencies</h3>
+            </div>
+            <div id="dependencies-status" class="space-y-2">
+                <div class="animate-pulse bg-gray-200 h-4 rounded"></div>
+                <div class="animate-pulse bg-gray-200 h-4 rounded w-3/4"></div>
+            </div>
+        </div>
+
+        <!-- End-to-End Tests -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <div class="flex items-center mb-4">
+                <i class="fas fa-flask text-purple-500 text-xl mr-3"></i>
+                <h3 class="text-lg font-semibold text-gray-900">E2E Tests</h3>
+            </div>
+            <div id="e2e-status" class="space-y-2">
+                <div class="animate-pulse bg-gray-200 h-4 rounded"></div>
+                <div class="animate-pulse bg-gray-200 h-4 rounded w-3/4"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Results -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <h2 class="text-xl font-semibold text-gray-900 mb-4">Detailed Health Checks</h2>
+        <div id="detailed-results">
+            <div class="text-center py-8">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                <p class="text-gray-600">Loading detailed results...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Metrics -->
+    <div class="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-white rounded-lg shadow-md p-4">
+            <div class="flex items-center">
+                <i class="fas fa-microchip text-blue-500 text-2xl mr-3"></i>
+                <div>
+                    <p class="text-sm text-gray-600">CPU Usage</p>
+                    <p id="cpu-usage" class="text-lg font-semibold">--</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-md p-4">
+            <div class="flex items-center">
+                <i class="fas fa-memory text-green-500 text-2xl mr-3"></i>
+                <div>
+                    <p class="text-sm text-gray-600">Memory Usage</p>
+                    <p id="memory-usage" class="text-lg font-semibold">--</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-md p-4">
+            <div class="flex items-center">
+                <i class="fas fa-hdd text-yellow-500 text-2xl mr-3"></i>
+                <div>
+                    <p class="text-sm text-gray-600">Disk Usage</p>
+                    <p id="disk-usage" class="text-lg font-semibold">--</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-md p-4">
+            <div class="flex items-center">
+                <i class="fas fa-database text-purple-500 text-2xl mr-3"></i>
+                <div>
+                    <p class="text-sm text-gray-600">Database Status</p>
+                    <p id="database-status" class="text-lg font-semibold">--</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Health check functions
+async function loadHealthStatus() {
+    try {
+        const response = await fetch('/health');
+        const data = await response.json();
+        
+        updateOverallStatus(data);
+        updateCategoryStatuses();
+        updateDetailedResults(data);
+        updateSystemMetrics(data);
+        
+    } catch (error) {
+        console.error('Error loading health status:', error);
+        document.getElementById('overall-status').innerHTML = `
+            <div class="text-red-500">
+                <i class="fas fa-exclamation-triangle text-4xl mb-4"></i>
+                <p class="text-lg font-semibold">Health Check Failed</p>
+                <p class="text-sm">${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+function updateOverallStatus(data) {
+    const statusElement = document.getElementById('overall-status');
+    const status = data.overall_status;
+    
+    let statusIcon, statusColor, statusText;
+    
+    switch (status) {
+        case 'pass':
+            statusIcon = 'fas fa-check-circle';
+            statusColor = 'text-green-500';
+            statusText = 'All Systems Operational';
+            break;
+        case 'warning':
+            statusIcon = 'fas fa-exclamation-triangle';
+            statusColor = 'text-yellow-500';
+            statusText = 'Some Issues Detected';
+            break;
+        case 'fail':
+            statusIcon = 'fas fa-times-circle';
+            statusColor = 'text-red-500';
+            statusText = 'System Issues Detected';
+            break;
+        default:
+            statusIcon = 'fas fa-question-circle';
+            statusColor = 'text-gray-500';
+            statusText = 'Unknown Status';
+    }
+    
+    statusElement.innerHTML = `
+        <div class="${statusColor}">
+            <i class="${statusIcon} text-6xl mb-4"></i>
+            <h3 class="text-2xl font-bold mb-2">${statusText}</h3>
+            <div class="grid grid-cols-3 gap-4 text-sm">
+                <div>
+                    <span class="text-green-600 font-semibold">${data.summary.passed}</span>
+                    <span class="text-gray-600">Passed</span>
+                </div>
+                <div>
+                    <span class="text-yellow-600 font-semibold">${data.summary.warnings}</span>
+                    <span class="text-gray-600">Warnings</span>
+                </div>
+                <div>
+                    <span class="text-red-600 font-semibold">${data.summary.failed}</span>
+                    <span class="text-gray-600">Failed</span>
+                </div>
+            </div>
+            <p class="text-xs text-gray-500 mt-4">Last updated: ${new Date(data.timestamp).toLocaleString()}</p>
+        </div>
+    `;
+}
+
+async function updateCategoryStatuses() {
+    // Load API status
+    try {
+        const apiResponse = await fetch('/health/api');
+        const apiData = await apiResponse.json();
+        updateCategoryStatus('api-status', apiData.checks || []);
+    } catch (error) {
+        document.getElementById('api-status').innerHTML = '<p class="text-red-500 text-sm">Failed to load</p>';
+    }
+
+    // Load dependencies status
+    try {
+        const depsResponse = await fetch('/health/dependencies');
+        const depsData = await depsResponse.json();
+        updateCategoryStatus('dependencies-status', depsData.checks || []);
+    } catch (error) {
+        document.getElementById('dependencies-status').innerHTML = '<p class="text-red-500 text-sm">Failed to load</p>';
+    }
+
+    // Load E2E status
+    try {
+        const e2eResponse = await fetch('/health/e2e');
+        const e2eData = await e2eResponse.json();
+        updateCategoryStatus('e2e-status', e2eData.checks || []);
+    } catch (error) {
+        document.getElementById('e2e-status').innerHTML = '<p class="text-red-500 text-sm">Failed to load</p>';
+    }
+
+    // Load Config status
+    try {
+        const configResponse = await fetch('/health/config');
+        const configData = await configResponse.json();
+        // Add config status display if needed
+    } catch (error) {
+        // Config check is optional
+    }
+}
+
+function updateCategoryStatus(elementId, checks) {
+    const element = document.getElementById(elementId);
+    const passed = checks.filter(c => c.status === 'pass').length;
+    const total = checks.length;
+    
+    let statusColor = 'text-green-500';
+    if (checks.some(c => c.status === 'fail')) {
+        statusColor = 'text-red-500';
+    } else if (checks.some(c => c.status === 'warning')) {
+        statusColor = 'text-yellow-500';
+    }
+    
+    element.innerHTML = `
+        <div class="flex justify-between items-center">
+            <span class="${statusColor} font-semibold">${passed}/${total} OK</span>
+            <i class="fas fa-chevron-right text-gray-400"></i>
+        </div>
+        <div class="text-xs text-gray-500 mt-1">
+            ${checks.filter(c => c.status === 'fail').length} failed, 
+            ${checks.filter(c => c.status === 'warning').length} warnings
+        </div>
+    `;
+}
+
+function updateDetailedResults(data) {
+    const element = document.getElementById('detailed-results');
+    
+    let html = '<div class="space-y-4">';
+    
+    data.checks.forEach(check => {
+        let statusIcon, statusColor;
+        
+        switch (check.status) {
+            case 'pass':
+                statusIcon = 'fas fa-check-circle';
+                statusColor = 'text-green-500';
+                break;
+            case 'warning':
+                statusIcon = 'fas fa-exclamation-triangle';
+                statusColor = 'text-yellow-500';
+                break;
+            case 'fail':
+                statusIcon = 'fas fa-times-circle';
+                statusColor = 'text-red-500';
+                break;
+            default:
+                statusIcon = 'fas fa-question-circle';
+                statusColor = 'text-gray-500';
+        }
+        
+        html += `
+            <div class="border rounded-lg p-4">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        <i class="${statusIcon} ${statusColor} mr-3"></i>
+                        <div>
+                            <h4 class="font-semibold">${check.name}</h4>
+                            <p class="text-sm text-gray-600">${check.message}</p>
+                        </div>
+                    </div>
+                    <span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">${check.category}</span>
+                </div>
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    element.innerHTML = html;
+}
+
+function updateSystemMetrics(data) {
+    // Extract system metrics from health check data
+    const systemCheck = data.checks.find(c => c.name === 'System Resources');
+    
+    if (systemCheck && systemCheck.details && systemCheck.details.metrics) {
+        const metrics = systemCheck.details.metrics;
+        
+        document.getElementById('cpu-usage').textContent = 
+            metrics.cpu_percent ? `${metrics.cpu_percent.toFixed(1)}%` : '--';
+        
+        document.getElementById('memory-usage').textContent = 
+            metrics.memory_percent ? `${metrics.memory_percent.toFixed(1)}%` : '--';
+        
+        document.getElementById('disk-usage').textContent = 
+            metrics.disk_percent ? `${metrics.disk_percent.toFixed(1)}%` : '--';
+    }
+    
+    // Database status
+    const dbCheck = data.checks.find(c => c.name === 'SQLite Databases');
+    if (dbCheck) {
+        const statusText = dbCheck.status === 'pass' ? 'Healthy' : 
+                          dbCheck.status === 'warning' ? 'Warning' : 'Error';
+        document.getElementById('database-status').textContent = statusText;
+    }
+}
+
+function refreshHealth() {
+    // Show loading state
+    document.getElementById('overall-status').innerHTML = `
+        <div class="text-center py-8">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <p class="text-gray-600">Refreshing health status...</p>
+        </div>
+    `;
+    
+    // Reload health status
+    loadHealthStatus();
+}
+
+// Load health status on page load
+document.addEventListener('DOMContentLoaded', loadHealthStatus);
+
+// Auto-refresh every 30 seconds
+setInterval(loadHealthStatus, 30000);
+</script>
+{% endblock %}

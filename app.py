@@ -6,18 +6,73 @@ A simple web interface for viewing Google Sheets survey data
 using Flask and Tailwind CSS.
 """
 
-from flask import Flask, render_template, request, jsonify, redirect, url_for
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session, flash
 import sqlite3
 import json
 import os
+import time
+import asyncio
+import logging
 from datetime import datetime
 from typing import List, Dict, Any
 import math
 from survey_analytics import SurveyAnalytics
 from auto_sync_service import get_auto_sync_service, start_auto_sync
 
+# For async support in Flask
+from functools import wraps
+
+# Configure logging for Railway deployment
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler()  # Railway captures stdout/stderr
+    ]
+)
+logger = logging.getLogger(__name__)
+
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'surveyor-data-viewer-2025'
+
+# Configuration
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'surveyor-data-viewer-2025-default-key')
+
+# Authentication configuration
+APP_PASSWORD = os.getenv('APP_PASSWORD', 'survey2025!')  # Default password, change in production
+REQUIRE_AUTH = os.getenv('REQUIRE_AUTH', 'true').lower() == 'true'
+
+# Port configuration
+DEFAULT_PORT = 5001
+PORT = int(os.getenv('PORT', DEFAULT_PORT))
+
+logger.info(f"App configuration:")
+logger.info(f"  Port: {PORT}")
+logger.info(f"  Authentication required: {REQUIRE_AUTH}")
+logger.info(f"  Password configured: {'Yes' if APP_PASSWORD else 'No'}")
+
+# Authentication decorator
+def require_auth(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not REQUIRE_AUTH:
+            return f(*args, **kwargs)
+
+        if 'authenticated' not in session:
+            return redirect(url_for('login', next=request.url))
+        return f(*args, **kwargs)
+    return decorated_function
+
+# Async support decorator for Flask
+def async_route(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(f(*args, **kwargs))
+        finally:
+            loop.close()
+    return wrapper
 
 # Database configuration
 DB_PATH = 'surveyor_data_improved.db'
@@ -195,7 +250,39 @@ db = DatabaseManager()
 analytics = SurveyAnalytics(SURVEY_DB_PATH)
 auto_sync = get_auto_sync_service()
 
+# Authentication routes
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Login page for application access."""
+    if not REQUIRE_AUTH:
+        return redirect(url_for('dashboard'))
+
+    if request.method == 'POST':
+        password = request.form.get('password')
+        next_url = request.form.get('next') or url_for('dashboard')
+
+        if password == APP_PASSWORD:
+            session['authenticated'] = True
+            logger.info(f"Successful login from {request.remote_addr}")
+            flash('Successfully logged in!', 'success')
+            return redirect(next_url)
+        else:
+            logger.warning(f"Failed login attempt from {request.remote_addr}")
+            flash('Invalid password. Please try again.', 'error')
+
+    next_url = request.args.get('next', url_for('dashboard'))
+    return render_template('login.html', next_url=next_url)
+
+@app.route('/logout')
+def logout():
+    """Logout and clear session."""
+    session.pop('authenticated', None)
+    logger.info(f"User logged out from {request.remote_addr}")
+    flash('You have been logged out.', 'info')
+    return redirect(url_for('login'))
+
 @app.route('/')
+@require_auth
 def dashboard():
     """Dashboard with overview statistics."""
     try:
@@ -206,6 +293,7 @@ def dashboard():
         return render_template('error.html', error=str(e)), 500
 
 @app.route('/spreadsheets')
+@require_auth
 def spreadsheets():
     """List all spreadsheets."""
     try:
@@ -215,6 +303,7 @@ def spreadsheets():
         return render_template('error.html', error=str(e)), 500
 
 @app.route('/spreadsheet/<spreadsheet_id>')
+@require_auth
 def view_spreadsheet(spreadsheet_id):
     """View data from a specific spreadsheet."""
     try:
@@ -231,6 +320,7 @@ def view_spreadsheet(spreadsheet_id):
         return render_template('error.html', error=str(e)), 500
 
 @app.route('/jobs')
+@require_auth
 def extraction_jobs():
     """View extraction job history."""
     try:
@@ -261,6 +351,7 @@ def api_stats():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/surveys')
+@require_auth
 def survey_dashboard():
     """Survey analytics dashboard."""
     try:
@@ -349,6 +440,7 @@ def api_survey_export(survey_id):
         return jsonify({'error': str(e)}), 500
 
 @app.route('/sync')
+@require_auth
 def sync_dashboard():
     """Auto-sync management dashboard."""
     try:
@@ -407,6 +499,588 @@ def api_sync_force():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+# Health Check System - Integrated Flask Endpoints
+class HealthCheckService:
+    """Integrated health check service for Flask application."""
+
+    def __init__(self):
+        self.cache = {}
+        self.cache_duration = 30  # seconds
+
+    def _is_cache_valid(self, cache_key):
+        """Check if cached result is still valid."""
+        if cache_key not in self.cache:
+            return False
+
+        cache_time = self.cache[cache_key].get('timestamp', 0)
+        return (time.time() - cache_time) < self.cache_duration
+
+    def _cache_result(self, cache_key, result):
+        """Cache a health check result."""
+        self.cache[cache_key] = {
+            'result': result,
+            'timestamp': time.time()
+        }
+
+    def _get_cached_result(self, cache_key):
+        """Get cached result if valid."""
+        if self._is_cache_valid(cache_key):
+            return self.cache[cache_key]['result']
+        return None
+
+    def check_api_keys(self):
+        """Check API keys and authentication."""
+        cache_key = 'api_keys'
+        cached = self._get_cached_result(cache_key)
+        if cached:
+            logger.debug("Using cached API keys health check result")
+            return cached
+
+        try:
+            logger.info("Running API keys health check")
+            from healthcheck.api_validators import run_all_api_validations
+            results = run_all_api_validations()
+
+            formatted_results = []
+            for name, status, message, details in results:
+                formatted_results.append({
+                    "name": name,
+                    "status": status,
+                    "message": message,
+                    "category": "api",
+                    "details": details
+                })
+
+                # Log individual check results for Railway logs
+                if status == "fail":
+                    logger.error(f"API Health Check FAILED - {name}: {message}")
+                elif status == "warning":
+                    logger.warning(f"API Health Check WARNING - {name}: {message}")
+                else:
+                    logger.debug(f"API Health Check PASSED - {name}: {message}")
+
+            result = {
+                "category": "api_keys",
+                "timestamp": datetime.now().isoformat(),
+                "checks": formatted_results,
+                "summary": self._calculate_summary(formatted_results)
+            }
+
+            summary = result["summary"]
+            logger.info(f"API keys health check completed: {summary['passed']}/{summary['total']} passed, {summary['failed']} failed, {summary['warnings']} warnings")
+
+            self._cache_result(cache_key, result)
+            return result
+
+        except Exception as e:
+            logger.error(f"API keys health check failed with exception: {str(e)}", exc_info=True)
+            return {
+                "category": "api_keys",
+                "timestamp": datetime.now().isoformat(),
+                "error": str(e),
+                "checks": [],
+                "summary": {"total": 0, "passed": 0, "failed": 1, "warnings": 0}
+            }
+
+    async def check_dependencies(self):
+        """Check external dependencies."""
+        cache_key = 'dependencies'
+        cached = self._get_cached_result(cache_key)
+        if cached:
+            return cached
+
+        try:
+            from healthcheck.dependency_checker import run_all_dependency_checks
+            results = await run_all_dependency_checks()
+
+            formatted_results = []
+            for name, status, message, details in results:
+                formatted_results.append({
+                    "name": name,
+                    "status": status,
+                    "message": message,
+                    "category": "dependency",
+                    "details": details
+                })
+
+            result = {
+                "category": "dependencies",
+                "timestamp": datetime.now().isoformat(),
+                "checks": formatted_results,
+                "summary": self._calculate_summary(formatted_results)
+            }
+
+            self._cache_result(cache_key, result)
+            return result
+
+        except Exception as e:
+            return {
+                "category": "dependencies",
+                "timestamp": datetime.now().isoformat(),
+                "error": str(e),
+                "checks": [],
+                "summary": {"total": 0, "passed": 0, "failed": 1, "warnings": 0}
+            }
+
+    async def check_e2e_tests(self):
+        """Run end-to-end tests."""
+        cache_key = 'e2e_tests'
+        cached = self._get_cached_result(cache_key)
+        if cached:
+            return cached
+
+        try:
+            from healthcheck.e2e_tests import run_all_e2e_tests
+            results = await run_all_e2e_tests()
+
+            formatted_results = []
+            for name, status, message, details in results:
+                formatted_results.append({
+                    "name": name,
+                    "status": status,
+                    "message": message,
+                    "category": "e2e",
+                    "details": details
+                })
+
+            result = {
+                "category": "e2e_tests",
+                "timestamp": datetime.now().isoformat(),
+                "checks": formatted_results,
+                "summary": self._calculate_summary(formatted_results)
+            }
+
+            self._cache_result(cache_key, result)
+            return result
+
+        except Exception as e:
+            return {
+                "category": "e2e_tests",
+                "timestamp": datetime.now().isoformat(),
+                "error": str(e),
+                "checks": [],
+                "summary": {"total": 0, "passed": 0, "failed": 1, "warnings": 0}
+            }
+
+    def check_configuration(self):
+        """Check configuration validation."""
+        cache_key = 'configuration'
+        cached = self._get_cached_result(cache_key)
+        if cached:
+            return cached
+
+        try:
+            from healthcheck.config_validator import run_all_config_validations
+            results = run_all_config_validations()
+
+            formatted_results = []
+            for name, status, message, details in results:
+                formatted_results.append({
+                    "name": name,
+                    "status": status,
+                    "message": message,
+                    "category": "config",
+                    "details": details
+                })
+
+            result = {
+                "category": "configuration",
+                "timestamp": datetime.now().isoformat(),
+                "checks": formatted_results,
+                "summary": self._calculate_summary(formatted_results)
+            }
+
+            self._cache_result(cache_key, result)
+            return result
+
+        except Exception as e:
+            return {
+                "category": "configuration",
+                "timestamp": datetime.now().isoformat(),
+                "error": str(e),
+                "checks": [],
+                "summary": {"total": 0, "passed": 0, "failed": 1, "warnings": 0}
+            }
+
+    def _calculate_summary(self, checks):
+        """Calculate summary statistics for checks."""
+        total = len(checks)
+        passed = sum(1 for c in checks if c["status"] == "pass")
+        failed = sum(1 for c in checks if c["status"] == "fail")
+        warnings = sum(1 for c in checks if c["status"] == "warning")
+
+        return {
+            "total": total,
+            "passed": passed,
+            "failed": failed,
+            "warnings": warnings
+        }
+
+    async def run_complete_health_check(self):
+        """Run all health checks and return comprehensive results."""
+        start_time = time.time()
+
+        # Run all check categories
+        api_results = self.check_api_keys()
+        dependency_results = await self.check_dependencies()
+        e2e_results = await self.check_e2e_tests()
+        config_results = self.check_configuration()
+
+        # Combine all results
+        all_checks = []
+        categories = {
+            "api_keys": api_results,
+            "dependencies": dependency_results,
+            "e2e_tests": e2e_results,
+            "configuration": config_results
+        }
+
+        for category_name, category_data in categories.items():
+            if "checks" in category_data:
+                all_checks.extend(category_data["checks"])
+
+        # Calculate overall summary
+        overall_summary = self._calculate_summary(all_checks)
+
+        # Determine overall status
+        overall_status = "pass"
+        if overall_summary["failed"] > 0:
+            overall_status = "fail"
+        elif overall_summary["warnings"] > 0:
+            overall_status = "warning"
+
+        duration_ms = (time.time() - start_time) * 1000
+
+        return {
+            "overall_status": overall_status,
+            "timestamp": datetime.now().isoformat(),
+            "duration_ms": duration_ms,
+            "summary": overall_summary,
+            "categories": {
+                name: data.get("summary", {}) for name, data in categories.items()
+            },
+            "checks": all_checks,
+            "category_details": categories
+        }
+
+# Initialize health check service
+health_service = HealthCheckService()
+
+@app.route('/health')
+@async_route
+async def health_check():
+    """
+    Comprehensive health check endpoint for Railway.
+
+    This endpoint is used by Railway for deployment health checks and monitoring.
+    It performs a complete system health assessment including:
+    - API keys and authentication
+    - External dependencies
+    - Database connectivity
+    - Configuration validation
+    """
+    start_time = time.time()
+    logger.info("Railway health check initiated")
+
+    try:
+        results = await health_service.run_complete_health_check()
+
+        # Log health check results for Railway logs
+        duration = (time.time() - start_time) * 1000
+        summary = results.get("summary", {})
+
+        logger.info(f"Health check completed in {duration:.0f}ms: "
+                   f"{summary.get('passed', 0)}/{summary.get('total', 0)} passed, "
+                   f"{summary.get('failed', 0)} failed, "
+                   f"{summary.get('warnings', 0)} warnings")
+
+        # Log any failures for Railway debugging
+        if results["overall_status"] == "fail":
+            failed_checks = [check for check in results.get("checks", []) if check["status"] == "fail"]
+            for check in failed_checks:
+                logger.error(f"HEALTH CHECK FAILURE: {check['name']} - {check['message']}")
+
+        # Railway expects 200 for healthy, 503 for unhealthy
+        status_code = 200 if results["overall_status"] == "pass" else 503
+
+        # Add Railway-specific metadata
+        results["railway_info"] = {
+            "environment": os.getenv("RAILWAY_ENVIRONMENT", "unknown"),
+            "service_name": os.getenv("RAILWAY_SERVICE_NAME", "unknown"),
+            "deployment_id": os.getenv("RAILWAY_DEPLOYMENT_ID", "unknown"),
+            "health_check_duration_ms": duration
+        }
+
+        return jsonify(results), status_code
+
+    except Exception as e:
+        duration = (time.time() - start_time) * 1000
+        logger.error(f"Health check failed with exception after {duration:.0f}ms: {str(e)}", exc_info=True)
+
+        return jsonify({
+            "overall_status": "fail",
+            "timestamp": datetime.now().isoformat(),
+            "error": str(e),
+            "summary": {"total": 0, "passed": 0, "failed": 1, "warnings": 0},
+            "railway_info": {
+                "environment": os.getenv("RAILWAY_ENVIRONMENT", "unknown"),
+                "service_name": os.getenv("RAILWAY_SERVICE_NAME", "unknown"),
+                "deployment_id": os.getenv("RAILWAY_DEPLOYMENT_ID", "unknown"),
+                "health_check_duration_ms": duration
+            }
+        }), 500
+
+@app.route('/health/api')
+def health_check_api():
+    """API keys and authentication health check."""
+    try:
+        results = health_service.check_api_keys()
+
+        failed = results.get("summary", {}).get("failed", 0)
+        status_code = 200 if failed == 0 else 503
+
+        return jsonify(results), status_code
+
+    except Exception as e:
+        return jsonify({
+            "category": "api_keys",
+            "timestamp": datetime.now().isoformat(),
+            "error": str(e)
+        }), 500
+
+@app.route('/health/dependencies')
+@async_route
+async def health_check_dependencies():
+    """External dependencies health check."""
+    try:
+        results = await health_service.check_dependencies()
+
+        failed = results.get("summary", {}).get("failed", 0)
+        status_code = 200 if failed == 0 else 503
+
+        return jsonify(results), status_code
+
+    except Exception as e:
+        return jsonify({
+            "category": "dependencies",
+            "timestamp": datetime.now().isoformat(),
+            "error": str(e)
+        }), 500
+
+@app.route('/health/e2e')
+@async_route
+async def health_check_e2e():
+    """End-to-end functionality health check."""
+    try:
+        results = await health_service.check_e2e_tests()
+
+        failed = results.get("summary", {}).get("failed", 0)
+        status_code = 200 if failed == 0 else 503
+
+        return jsonify(results), status_code
+
+    except Exception as e:
+        return jsonify({
+            "category": "e2e_tests",
+            "timestamp": datetime.now().isoformat(),
+            "error": str(e)
+        }), 500
+
+@app.route('/health/config')
+def health_check_config():
+    """Configuration validation health check."""
+    try:
+        results = health_service.check_configuration()
+
+        failed = results.get("summary", {}).get("failed", 0)
+        status_code = 200 if failed == 0 else 503
+
+        return jsonify(results), status_code
+
+    except Exception as e:
+        return jsonify({
+            "category": "configuration",
+            "timestamp": datetime.now().isoformat(),
+            "error": str(e)
+        }), 500
+
+@app.route('/health/dashboard')
+@require_auth
+def health_dashboard():
+    """Health dashboard web interface."""
+    return render_template('health_dashboard.html')
+
+@app.route('/health/status')
+@async_route
+async def health_status():
+    """
+    Quick health status endpoint for load balancers and Railway.
+
+    This is a lightweight health check that focuses on critical services only.
+    Used by Railway for quick health monitoring and load balancer health checks.
+    """
+    start_time = time.time()
+
+    try:
+        # Quick check - just critical services
+        api_results = health_service.check_api_keys()
+        dependency_results = await health_service.check_dependencies()
+
+        # Focus on critical checks only
+        critical_checks = []
+        critical_services = {
+            "api": ["Google Credentials", "Environment Variables"],
+            "dependencies": ["SQLite Databases", "Google Sheets API"]
+        }
+
+        # Check for critical API failures
+        for check in api_results.get("checks", []):
+            if check["name"] in critical_services["api"] and check["status"] == "fail":
+                critical_checks.append(check)
+
+        # Check for critical dependency failures
+        for check in dependency_results.get("checks", []):
+            if check["name"] in critical_services["dependencies"] and check["status"] == "fail":
+                critical_checks.append(check)
+
+        duration = (time.time() - start_time) * 1000
+
+        if critical_checks:
+            logger.warning(f"Health status check failed: {len(critical_checks)} critical issues in {duration:.0f}ms")
+            for check in critical_checks:
+                logger.error(f"CRITICAL HEALTH ISSUE: {check['name']} - {check['message']}")
+
+            return jsonify({
+                "status": "unhealthy",
+                "timestamp": datetime.now().isoformat(),
+                "critical_issues": len(critical_checks),
+                "duration_ms": duration,
+                "railway_info": {
+                    "environment": os.getenv("RAILWAY_ENVIRONMENT", "unknown"),
+                    "deployment_id": os.getenv("RAILWAY_DEPLOYMENT_ID", "unknown")
+                }
+            }), 503
+        else:
+            logger.debug(f"Health status check passed in {duration:.0f}ms")
+            return jsonify({
+                "status": "healthy",
+                "timestamp": datetime.now().isoformat(),
+                "duration_ms": duration,
+                "railway_info": {
+                    "environment": os.getenv("RAILWAY_ENVIRONMENT", "unknown"),
+                    "deployment_id": os.getenv("RAILWAY_DEPLOYMENT_ID", "unknown")
+                }
+            }), 200
+
+    except Exception as e:
+        duration = (time.time() - start_time) * 1000
+        logger.error(f"Health status check failed with exception in {duration:.0f}ms: {str(e)}")
+
+        return jsonify({
+            "status": "error",
+            "timestamp": datetime.now().isoformat(),
+            "error": str(e),
+            "duration_ms": duration,
+            "railway_info": {
+                "environment": os.getenv("RAILWAY_ENVIRONMENT", "unknown"),
+                "deployment_id": os.getenv("RAILWAY_DEPLOYMENT_ID", "unknown")
+            }
+        }), 500
+
+@app.route('/health/metrics')
+@async_route
+async def health_metrics():
+    """Health metrics endpoint for monitoring systems."""
+    try:
+        results = await health_service.run_complete_health_check()
+
+        # Convert to Prometheus-style metrics
+        metrics = []
+
+        # Overall health metric
+        health_value = 1 if results["overall_status"] == "pass" else 0
+        metrics.append(f'health_check_status{{overall="true"}} {health_value}')
+
+        # Category metrics
+        for category, summary in results.get("categories", {}).items():
+            total = summary.get("total", 0)
+            passed = summary.get("passed", 0)
+            failed = summary.get("failed", 0)
+            warnings = summary.get("warnings", 0)
+
+            metrics.append(f'health_check_total{{category="{category}"}} {total}')
+            metrics.append(f'health_check_passed{{category="{category}"}} {passed}')
+            metrics.append(f'health_check_failed{{category="{category}"}} {failed}')
+            metrics.append(f'health_check_warnings{{category="{category}"}} {warnings}')
+
+        # Duration metric
+        duration = results.get("duration_ms", 0)
+        metrics.append(f'health_check_duration_ms {duration}')
+
+        # Individual check metrics
+        for check in results.get("checks", []):
+            check_value = 1 if check["status"] == "pass" else 0
+            check_name = check["name"].lower().replace(" ", "_").replace("-", "_")
+            category = check["category"]
+            metrics.append(f'health_check_individual{{name="{check_name}",category="{category}"}} {check_value}')
+
+        response_text = "\n".join(metrics) + "\n"
+
+        return app.response_class(
+            response=response_text,
+            status=200,
+            mimetype='text/plain'
+        )
+
+    except Exception as e:
+        return app.response_class(
+            response=f'health_check_error 1\n# Error: {str(e)}\n',
+            status=500,
+            mimetype='text/plain'
+        )
+
+@app.route('/health/test')
+def health_test():
+    """Simple test endpoint to verify health check system is working."""
+    logger.info("Health check test endpoint accessed")
+
+    # Railway deployment info
+    railway_info = {
+        "railway_environment": os.getenv("RAILWAY_ENVIRONMENT", "unknown"),
+        "railway_service_name": os.getenv("RAILWAY_SERVICE_NAME", "unknown"),
+        "railway_deployment_id": os.getenv("RAILWAY_DEPLOYMENT_ID", "unknown"),
+        "port": os.getenv("PORT", "5001")
+    }
+
+    return jsonify({
+        "message": "Health check system is operational",
+        "timestamp": datetime.now().isoformat(),
+        "deployment": railway_info,
+        "endpoints": {
+            "complete_check": "/health",
+            "api_keys": "/health/api",
+            "dependencies": "/health/dependencies",
+            "e2e_tests": "/health/e2e",
+            "configuration": "/health/config",
+            "quick_status": "/health/status",
+            "metrics": "/health/metrics",
+            "dashboard": "/health/dashboard"
+        },
+        "cache_info": {
+            "cache_duration_seconds": health_service.cache_duration,
+            "cached_results": list(health_service.cache.keys())
+        },
+        "system_info": {
+            "python_path": os.getenv("PYTHONPATH", "not_set"),
+            "working_directory": os.getcwd(),
+            "environment_vars": {
+                "GOOGLE_CREDENTIALS_FILE": "set" if os.getenv("GOOGLE_CREDENTIALS_FILE") else "not_set",
+                "DATABASE_URL": "set" if os.getenv("DATABASE_URL") else "not_set",
+                "LOG_LEVEL": os.getenv("LOG_LEVEL", "not_set")
+            }
+        }
+    })
+
 @app.template_filter('datetime')
 def datetime_filter(value):
     """Format datetime strings."""
@@ -450,14 +1124,55 @@ def inject_now():
     return {'now': datetime.now()}
 
 if __name__ == '__main__':
+    # Railway deployment logging
+    logger.info("🚀 Starting JJF Survey Analytics application")
+    logger.info(f"Environment: {os.getenv('RAILWAY_ENVIRONMENT', 'local')}")
+    logger.info(f"Service: {os.getenv('RAILWAY_SERVICE_NAME', 'local')}")
+    logger.info(f"Deployment ID: {os.getenv('RAILWAY_DEPLOYMENT_ID', 'local')}")
+
     # Check if database exists
     if not os.path.exists(DB_PATH):
-        print(f"❌ Database not found: {DB_PATH}")
-        print("Please run the data extractor first to create the database.")
-        exit(1)
-    
-    print("🚀 Starting Surveyor Data Viewer...")
-    print(f"📊 Database: {DB_PATH}")
-    print("🌐 Open http://localhost:5001 in your browser")
-    
-    app.run(debug=True, host='0.0.0.0', port=5001)
+        logger.warning(f"❌ Database not found: {DB_PATH}")
+        logger.info("Application will start but some features may not work without data")
+        logger.info("Run the data extractor to create the database")
+    else:
+        logger.info(f"📊 Database found: {DB_PATH}")
+
+    if os.path.exists(SURVEY_DB_PATH):
+        logger.info(f"🌐 Survey Database found: {SURVEY_DB_PATH}")
+    else:
+        logger.warning(f"Survey Database not found: {SURVEY_DB_PATH}")
+
+    # Use the configured PORT
+    host = '0.0.0.0'  # Railway requires binding to 0.0.0.0
+
+    logger.info(f"🔗 Application will be available at: http://localhost:{PORT}")
+    logger.info("🔐 Authentication required" if REQUIRE_AUTH else "🔓 No authentication required")
+    logger.info("📈 Health Dashboard at: /health/dashboard")
+    logger.info("🧪 Health Test at: /health/test")
+    logger.info("📊 Survey Analytics at: /surveys")
+    logger.info("🔄 Auto-Sync Dashboard at: /sync")
+
+    # Start auto-sync service
+    try:
+        start_auto_sync()
+        logger.info("✅ Auto-sync service started")
+    except Exception as e:
+        logger.error(f"❌ Failed to start auto-sync service: {e}")
+
+    # Initialize health check system
+    logger.info("🏥 Initializing health check system")
+    try:
+        # Test health check system
+        test_result = health_service.check_api_keys()
+        logger.info(f"✅ Health check system initialized - API check: {test_result.get('summary', {}).get('total', 0)} checks")
+    except Exception as e:
+        logger.error(f"❌ Health check system initialization failed: {e}")
+
+    # Start Flask application
+    logger.info(f"🌐 Starting Flask server on {host}:{PORT}")
+
+    # Railway deployment considerations
+    debug_mode = os.getenv('RAILWAY_ENVIRONMENT') != 'production'
+
+    app.run(host=host, port=PORT, debug=debug_mode)
