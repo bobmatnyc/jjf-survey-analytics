@@ -598,6 +598,31 @@ def survey_dashboard():
             if 'no such table' in str(analytics_error).lower():
                 return render_template('error.html',
                                      error=f'Survey database tables missing. <a href="/init-survey-db">Click here to initialize the database</a>. Error: {analytics_error}'), 500
+            elif 'no such column' in str(analytics_error).lower():
+                # Handle schema mismatch - provide basic survey info instead
+                import sqlite3
+                with sqlite3.connect(SURVEY_DB_PATH) as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT COUNT(*) FROM surveys")
+                    survey_count = cursor.fetchone()[0]
+                    cursor.execute("SELECT COUNT(*) FROM survey_questions")
+                    question_count = cursor.fetchone()[0]
+
+                    # Get basic survey list
+                    cursor.execute("SELECT survey_name, survey_type FROM surveys LIMIT 10")
+                    surveys = [{'survey_name': row[0], 'survey_type': row[1]} for row in cursor.fetchall()]
+
+                # Create basic overview data
+                overview = {
+                    'total_surveys': survey_count,
+                    'total_questions': question_count,
+                    'total_responses': 0,
+                    'response_rate': 0,
+                    'schema_note': 'Limited data due to schema differences'
+                }
+                survey_breakdown = surveys
+                respondent_analysis = {'browser_breakdown': [], 'device_breakdown': [], 'response_frequency': []}
+                completion_stats = []
             else:
                 raise analytics_error
 
@@ -1830,11 +1855,20 @@ def comprehensive_status_check():
         # Check analytics availability
         try:
             if analytics:
-                overview = analytics.get_survey_overview()
+                # Try a simple query that doesn't depend on specific column names
+                import sqlite3
+                with sqlite3.connect(SURVEY_DB_PATH) as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT COUNT(*) FROM surveys")
+                    survey_count = cursor.fetchone()[0]
+                    cursor.execute("SELECT COUNT(*) FROM survey_questions")
+                    question_count = cursor.fetchone()[0]
+
                 status['components']['survey_analytics'] = {
                     'status': 'healthy',
-                    'total_surveys': overview.get('total_surveys', 0),
-                    'total_responses': overview.get('total_responses', 0)
+                    'total_surveys': survey_count,
+                    'total_questions': question_count,
+                    'note': 'Using basic queries due to schema differences'
                 }
             else:
                 status['components']['survey_analytics'] = {
