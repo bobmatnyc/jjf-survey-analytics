@@ -1760,6 +1760,111 @@ def test_latest_updates():
             'timestamp': datetime.now().isoformat()
         }), 500
 
+@app.route('/status-check')
+def comprehensive_status_check():
+    """Comprehensive status check for all application components."""
+    try:
+        status = {
+            'timestamp': datetime.now().isoformat(),
+            'environment': 'railway' if os.getenv('RAILWAY_ENVIRONMENT') else 'local',
+            'components': {}
+        }
+
+        # Check main database
+        try:
+            stats = db.get_dashboard_stats()
+            status['components']['main_database'] = {
+                'status': 'healthy',
+                'spreadsheets': stats.get('total_spreadsheets', 0),
+                'data_rows': stats.get('total_rows', 0),
+                'jobs': stats.get('total_jobs', 0)
+            }
+        except Exception as e:
+            status['components']['main_database'] = {
+                'status': 'error',
+                'error': str(e)
+            }
+
+        # Check survey database
+        try:
+            if os.path.exists(SURVEY_DB_PATH):
+                import sqlite3
+                with sqlite3.connect(SURVEY_DB_PATH) as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT COUNT(*) FROM survey_questions")
+                    question_count = cursor.fetchone()[0]
+
+                    cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+                    tables = [row[0] for row in cursor.fetchall()]
+
+                    status['components']['survey_database'] = {
+                        'status': 'healthy',
+                        'questions': question_count,
+                        'tables': tables
+                    }
+            else:
+                status['components']['survey_database'] = {
+                    'status': 'missing',
+                    'message': 'Survey database file not found'
+                }
+        except Exception as e:
+            status['components']['survey_database'] = {
+                'status': 'error',
+                'error': str(e)
+            }
+
+        # Check latest updates functionality
+        try:
+            updates = db.get_latest_updates(5)
+            status['components']['latest_updates'] = {
+                'status': 'healthy',
+                'update_count': len(updates),
+                'has_enhanced_data': len(updates) > 0 and 'key_value_pairs' in updates[0]
+            }
+        except Exception as e:
+            status['components']['latest_updates'] = {
+                'status': 'error',
+                'error': str(e)
+            }
+
+        # Check analytics availability
+        try:
+            if analytics:
+                overview = analytics.get_survey_overview()
+                status['components']['survey_analytics'] = {
+                    'status': 'healthy',
+                    'total_surveys': overview.get('total_surveys', 0),
+                    'total_responses': overview.get('total_responses', 0)
+                }
+            else:
+                status['components']['survey_analytics'] = {
+                    'status': 'unavailable',
+                    'message': 'Analytics module not loaded'
+                }
+        except Exception as e:
+            status['components']['survey_analytics'] = {
+                'status': 'error',
+                'error': str(e)
+            }
+
+        # Overall health
+        healthy_components = sum(1 for comp in status['components'].values() if comp.get('status') == 'healthy')
+        total_components = len(status['components'])
+
+        status['overall'] = {
+            'health': 'healthy' if healthy_components == total_components else 'partial',
+            'healthy_components': healthy_components,
+            'total_components': total_components
+        }
+
+        return jsonify(status)
+
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
 @app.template_filter('datetime')
 def datetime_filter(value):
     """Format datetime strings."""
