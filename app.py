@@ -1307,6 +1307,45 @@ def check_stats():
             'timestamp': datetime.now().isoformat()
         }), 500
 
+@app.route('/check-schema')
+def check_schema():
+    """Check database schema differences."""
+    try:
+        import sqlite3
+
+        schema_info = {}
+
+        # Check main database schema
+        with sqlite3.connect('surveyor_data_improved.db') as conn:
+            cursor = conn.cursor()
+
+            # Get table schemas
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+            tables = [row[0] for row in cursor.fetchall()]
+
+            for table in tables:
+                cursor.execute(f"PRAGMA table_info({table})")
+                columns = cursor.fetchall()
+                schema_info[table] = {
+                    'columns': [{'name': col[1], 'type': col[2], 'notnull': col[3], 'pk': col[5]} for col in columns]
+                }
+
+                # Get row count
+                cursor.execute(f"SELECT COUNT(*) FROM {table}")
+                schema_info[table]['row_count'] = cursor.fetchone()[0]
+
+        return jsonify({
+            'schema': schema_info,
+            'timestamp': datetime.now().isoformat(),
+            'environment': 'railway' if os.getenv('RAILWAY_ENVIRONMENT') else 'local'
+        })
+
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
 @app.template_filter('datetime')
 def datetime_filter(value):
     """Format datetime strings."""
