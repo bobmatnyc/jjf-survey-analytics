@@ -1569,7 +1569,7 @@ def fix_data_schema():
 
 @app.route('/test-updates')
 def test_latest_updates():
-    """Test endpoint to check latest updates functionality."""
+    """Test endpoint to check latest updates functionality with enhanced data."""
     try:
         updates = db.get_latest_updates(10)
         return jsonify({
