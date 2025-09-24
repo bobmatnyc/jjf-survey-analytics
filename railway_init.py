@@ -66,6 +66,55 @@ def railway_database_init():
             logger.error("❌ Database verification failed")
             return False
         
+        # Auto-import local data if available and needed
+        try:
+            if os.path.exists('railway_data_import.sql'):
+                logger.info("🔄 Checking if data import is needed...")
+
+                # Check current data count
+                with sqlite3.connect('surveyor_data_improved.db') as conn:
+                    cursor = conn.cursor()
+                    cursor.execute('SELECT COUNT(*) FROM spreadsheets')
+                    current_count = cursor.fetchone()[0]
+
+                    if current_count <= 1:  # Only has sample data
+                        logger.info("📥 Auto-importing local data to Railway...")
+
+                        # Import main database data
+                        with open('railway_data_import.sql', 'r') as f:
+                            sql_content = f.read()
+                            statements = sql_content.split(';')
+                            imported_statements = 0
+
+                            for statement in statements:
+                                statement = statement.strip()
+                                if statement and not statement.startswith('--'):
+                                    try:
+                                        conn.execute(statement)
+                                        imported_statements += 1
+                                    except Exception as e:
+                                        if 'already exists' not in str(e) and 'UNIQUE constraint failed' not in str(e):
+                                            logger.warning(f"SQL import warning: {e}")
+
+                            conn.commit()
+                            logger.info(f"✅ Imported {imported_statements} SQL statements")
+
+                        # Verify import
+                        cursor.execute('SELECT COUNT(*) FROM spreadsheets')
+                        new_spreadsheet_count = cursor.fetchone()[0]
+                        cursor.execute('SELECT COUNT(*) FROM raw_data')
+                        new_row_count = cursor.fetchone()[0]
+
+                        logger.info(f"🎉 Data import completed: {new_spreadsheet_count} spreadsheets, {new_row_count} data rows")
+                    else:
+                        logger.info(f"📊 Railway already has {current_count} spreadsheets - skipping data import")
+            else:
+                logger.info("📋 No data import file found - using initialized sample data")
+
+        except Exception as e:
+            logger.error(f"❌ Data import error: {e}")
+            # Continue anyway - the app should still work with sample data
+
         logger.info("🎉 Railway database initialization complete!")
         return True
         
