@@ -1546,6 +1546,23 @@ def fix_data_schema():
             'timestamp': datetime.now().isoformat()
         }), 500
 
+@app.route('/test-updates')
+def test_latest_updates():
+    """Test endpoint to check latest updates functionality."""
+    try:
+        updates = db.get_latest_updates(10)
+        return jsonify({
+            'status': 'success',
+            'count': len(updates),
+            'updates': updates[:5],  # First 5 for preview
+            'timestamp': datetime.now().isoformat()
+        })
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
 @app.template_filter('datetime')
 def datetime_filter(value):
     """Format datetime strings."""
