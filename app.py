@@ -1291,6 +1291,22 @@ def manual_import_data():
             'timestamp': datetime.now().isoformat()
         }), 500
 
+@app.route('/check-stats')
+def check_stats():
+    """Check current dashboard stats without authentication."""
+    try:
+        stats = db.get_dashboard_stats()
+        return jsonify({
+            'stats': stats,
+            'timestamp': datetime.now().isoformat(),
+            'environment': 'railway' if os.getenv('RAILWAY_ENVIRONMENT') else 'local'
+        })
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
 @app.template_filter('datetime')
 def datetime_filter(value):
     """Format datetime strings."""
