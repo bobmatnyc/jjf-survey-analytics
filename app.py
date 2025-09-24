@@ -1899,6 +1899,75 @@ def comprehensive_status_check():
             'timestamp': datetime.now().isoformat()
         }), 500
 
+@app.route('/test-survey-dashboard')
+def test_survey_dashboard():
+    """Test survey dashboard functionality without authentication."""
+    try:
+        # Check if normalized database exists
+        if not os.path.exists(SURVEY_DB_PATH):
+            return jsonify({
+                'error': f'Survey database not found at {SURVEY_DB_PATH}',
+                'status': 'missing_database'
+            }), 404
+
+        # Check if analytics is available
+        if not analytics:
+            return jsonify({
+                'error': 'Survey analytics not available',
+                'status': 'no_analytics'
+            }), 500
+
+        # Try to get analytics data with error handling
+        try:
+            overview = analytics.get_survey_overview()
+            survey_breakdown = analytics.get_survey_breakdown()
+            result = {
+                'status': 'success',
+                'overview': overview,
+                'survey_count': len(survey_breakdown),
+                'message': 'Survey dashboard data loaded successfully'
+            }
+        except Exception as analytics_error:
+            if 'no such table' in str(analytics_error).lower():
+                result = {
+                    'status': 'missing_tables',
+                    'error': str(analytics_error),
+                    'message': 'Survey database tables missing'
+                }
+            elif 'no such column' in str(analytics_error).lower():
+                # Handle schema mismatch - provide basic survey info instead
+                import sqlite3
+                with sqlite3.connect(SURVEY_DB_PATH) as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT COUNT(*) FROM surveys")
+                    survey_count = cursor.fetchone()[0]
+                    cursor.execute("SELECT COUNT(*) FROM survey_questions")
+                    question_count = cursor.fetchone()[0]
+
+                result = {
+                    'status': 'schema_mismatch_handled',
+                    'basic_data': {
+                        'total_surveys': survey_count,
+                        'total_questions': question_count
+                    },
+                    'message': 'Using basic data due to schema differences',
+                    'original_error': str(analytics_error)
+                }
+            else:
+                result = {
+                    'status': 'analytics_error',
+                    'error': str(analytics_error)
+                }
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'status': 'failed',
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
 @app.template_filter('datetime')
 def datetime_filter(value):
     """Format datetime strings."""
