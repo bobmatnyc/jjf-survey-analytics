@@ -298,6 +298,78 @@ class DatabaseManager:
                 'sheet_types': []
             }
 
+    def get_latest_updates(self, limit=20):
+        """Get the latest data updates/changes in descending order of recency."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+
+                # Get latest raw data entries with spreadsheet info
+                cursor.execute('''
+                    SELECT
+                        rd.id,
+                        rd.row_number,
+                        rd.created_at,
+                        s.title as spreadsheet_title,
+                        s.sheet_type,
+                        s.spreadsheet_id,
+                        rd.data_json
+                    FROM raw_data rd
+                    JOIN spreadsheets s ON rd.spreadsheet_id = s.spreadsheet_id
+                    ORDER BY rd.created_at DESC
+                    LIMIT ?
+                ''', (limit,))
+
+                updates = []
+                for row in cursor.fetchall():
+                    try:
+                        # Parse the data_json to get a preview
+                        import json
+                        data = json.loads(row['data_json']) if row['data_json'] else {}
+
+                        # Create a preview of the data (first few non-empty values)
+                        preview_items = []
+                        for key, value in data.items():
+                            if value and str(value).strip() and len(preview_items) < 3:
+                                # Clean up the preview text
+                                preview_value = str(value).strip()
+                                if len(preview_value) > 50:
+                                    preview_value = preview_value[:47] + "..."
+                                preview_items.append(f"{key}: {preview_value}")
+
+                        preview = " | ".join(preview_items) if preview_items else "No data preview available"
+
+                        updates.append({
+                            'id': row['id'],
+                            'spreadsheet_title': row['spreadsheet_title'],
+                            'sheet_type': row['sheet_type'],
+                            'spreadsheet_id': row['spreadsheet_id'],
+                            'row_number': row['row_number'],
+                            'created_at': row['created_at'],
+                            'preview': preview,
+                            'data_count': len([v for v in data.values() if v and str(v).strip()])
+                        })
+                    except Exception as e:
+                        logger.warning(f"Error processing update row {row['id']}: {e}")
+                        # Add a safe fallback entry
+                        updates.append({
+                            'id': row['id'],
+                            'spreadsheet_title': row['spreadsheet_title'] or 'Unknown Spreadsheet',
+                            'sheet_type': row['sheet_type'] or 'unknown',
+                            'spreadsheet_id': row['spreadsheet_id'],
+                            'row_number': row['row_number'],
+                            'created_at': row['created_at'],
+                            'preview': 'Data processing error',
+                            'data_count': 0
+                        })
+
+                logger.info(f"✅ Retrieved {len(updates)} latest updates")
+                return updates
+
+        except Exception as e:
+            logger.error(f"❌ Error getting latest updates: {e}")
+            return []
+
 # Initialize database on Railway
 if os.getenv('RAILWAY_ENVIRONMENT'):
     logger.info("🚂 Railway environment detected - initializing database...")
@@ -396,7 +468,15 @@ def dashboard():
             logger.error(f"❌ Error getting spreadsheets: {ss_error}")
             spreadsheets = []
 
-        return render_template('dashboard.html', stats=stats, spreadsheets=spreadsheets)
+        # Get latest updates safely
+        try:
+            latest_updates = db.get_latest_updates(20)
+            logger.info(f"✅ Retrieved {len(latest_updates)} latest updates")
+        except Exception as updates_error:
+            logger.error(f"❌ Error getting latest updates: {updates_error}")
+            latest_updates = []
+
+        return render_template('dashboard.html', stats=stats, spreadsheets=spreadsheets, latest_updates=latest_updates)
 
     except Exception as e:
         logger.error(f"❌ Dashboard route error: {str(e)}")

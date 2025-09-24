@@ -166,20 +166,84 @@
     </div>
 </div>
 
-<!-- Recent Spreadsheets -->
-<div class="bg-white rounded-lg shadow-md">
-    <div class="px-6 py-4 border-b border-gray-200">
-        <div class="flex justify-between items-center">
+<!-- Latest Updates and Recent Spreadsheets -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+    <!-- Latest Updates -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <div class="flex items-center justify-between mb-6">
+            <h3 class="text-lg font-semibold text-gray-900">
+                <i class="fas fa-clock text-survey-green mr-2"></i>
+                Latest Updates
+            </h3>
+            <span class="text-sm text-gray-500">Last 20 changes</span>
+        </div>
+
+        {% if latest_updates %}
+        <div class="space-y-4 max-h-96 overflow-y-auto">
+            {% for update in latest_updates %}
+            <div class="border-l-4 pl-4 py-2 hover:bg-gray-50 rounded-r-lg transition-colors
+                {% if update.sheet_type == 'survey' %}border-survey-blue
+                {% elif update.sheet_type == 'assessment' %}border-survey-green
+                {% elif update.sheet_type == 'inventory' %}border-survey-purple
+                {% else %}border-gray-300{% endif %}">
+
+                <div class="flex items-start justify-between">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center space-x-2 mb-1">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
+                                {% if update.sheet_type == 'survey' %}bg-survey-blue bg-opacity-10 text-survey-blue
+                                {% elif update.sheet_type == 'assessment' %}bg-survey-green bg-opacity-10 text-survey-green
+                                {% elif update.sheet_type == 'inventory' %}bg-survey-purple bg-opacity-10 text-survey-purple
+                                {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                {{ update.sheet_type|title }}
+                            </span>
+                            <span class="text-xs text-gray-500">Row {{ update.row_number }}</span>
+                            <span class="text-xs text-gray-500">{{ update.data_count }} fields</span>
+                        </div>
+
+                        <p class="text-sm font-medium text-gray-900 truncate mb-1">
+                            {{ update.spreadsheet_title }}
+                        </p>
+
+                        <p class="text-xs text-gray-600 line-clamp-2">
+                            {{ update.preview }}
+                        </p>
+                    </div>
+
+                    <div class="flex-shrink-0 ml-4">
+                        <p class="text-xs text-gray-500">
+                            {% if update.created_at %}
+                                {{ update.created_at|datetime }}
+                            {% else %}
+                                Unknown time
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-8">
+            <i class="fas fa-clock text-gray-400 text-3xl mb-4"></i>
+            <p class="text-gray-500">No recent updates</p>
+            <p class="text-sm text-gray-400 mt-2">Data changes will appear here</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Recent Spreadsheets -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <div class="flex items-center justify-between mb-6">
             <h3 class="text-lg font-semibold text-gray-900">
                 <i class="fas fa-table text-survey-blue mr-2"></i>
                 Recent Spreadsheets
             </h3>
-            <a href="{{ url_for('spreadsheets') }}" 
+            <a href="{{ url_for('spreadsheets') }}"
                class="text-survey-blue hover:text-blue-700 text-sm font-medium transition-colors">
                 View All <i class="fas fa-arrow-right ml-1"></i>
             </a>
         </div>
-    </div>
     
     {% if spreadsheets %}
     <div class="overflow-x-auto">
@@ -252,6 +316,7 @@
         <p class="text-gray-500">Run the data extractor to import Google Sheets data</p>
     </div>
     {% endif %}
+    </div>
 </div>
 {% endblock %}
 
