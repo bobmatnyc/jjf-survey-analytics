@@ -1218,6 +1218,79 @@ def health_test():
         }
     })
 
+@app.route('/import-data')
+def manual_import_data():
+    """Manual data import endpoint."""
+    try:
+        import sqlite3
+        import os
+
+        results = {
+            'status': 'started',
+            'timestamp': datetime.now().isoformat(),
+            'environment': 'railway' if is_railway else 'local',
+            'files_found': [],
+            'current_dir': os.getcwd(),
+            'files_in_dir': os.listdir('.'),
+            'import_results': []
+        }
+
+        # Check for import files
+        if os.path.exists('railway_data_import.sql'):
+            results['files_found'].append('railway_data_import.sql')
+
+            # Import main database
+            with sqlite3.connect('surveyor_data_improved.db') as conn:
+                cursor = conn.cursor()
+
+                # Check current count
+                cursor.execute('SELECT COUNT(*) FROM spreadsheets')
+                before_count = cursor.fetchone()[0]
+
+                # Import data
+                with open('railway_data_import.sql', 'r') as f:
+                    sql_content = f.read()
+                    statements = sql_content.split(';')
+                    imported = 0
+                    errors = []
+
+                    for statement in statements:
+                        statement = statement.strip()
+                        if statement and not statement.startswith('--'):
+                            try:
+                                conn.execute(statement)
+                                imported += 1
+                            except Exception as e:
+                                if 'already exists' not in str(e) and 'UNIQUE constraint failed' not in str(e):
+                                    errors.append(str(e))
+
+                    conn.commit()
+
+                # Check after count
+                cursor.execute('SELECT COUNT(*) FROM spreadsheets')
+                after_count = cursor.fetchone()[0]
+                cursor.execute('SELECT COUNT(*) FROM raw_data')
+                row_count = cursor.fetchone()[0]
+
+                results['import_results'].append({
+                    'database': 'main',
+                    'statements_imported': imported,
+                    'spreadsheets_before': before_count,
+                    'spreadsheets_after': after_count,
+                    'total_rows': row_count,
+                    'errors': errors[:5]  # First 5 errors only
+                })
+
+        results['status'] = 'completed'
+        return jsonify(results)
+
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'status': 'failed',
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
 @app.template_filter('datetime')
 def datetime_filter(value):
     """Format datetime strings."""
