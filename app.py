@@ -581,12 +581,25 @@ def survey_dashboard():
         # Check if normalized database exists
         if not os.path.exists(SURVEY_DB_PATH):
             return render_template('error.html',
-                                 error='Normalized survey database not found. Please run survey_normalizer.py first.'), 404
+                                 error=f'Survey database not found at {SURVEY_DB_PATH}. <a href="/init-survey-db">Click here to initialize it</a>.'), 404
 
-        overview = analytics.get_survey_overview()
-        survey_breakdown = analytics.get_survey_breakdown()
-        respondent_analysis = analytics.get_respondent_analysis()
-        completion_stats = analytics.get_survey_completion_stats()
+        # Check if analytics is available
+        if not analytics:
+            return render_template('error.html',
+                                 error='Survey analytics not available. Please check the survey database.'), 500
+
+        # Try to get analytics data with error handling
+        try:
+            overview = analytics.get_survey_overview()
+            survey_breakdown = analytics.get_survey_breakdown()
+            respondent_analysis = analytics.get_respondent_analysis()
+            completion_stats = analytics.get_survey_completion_stats()
+        except Exception as analytics_error:
+            if 'no such table' in str(analytics_error).lower():
+                return render_template('error.html',
+                                     error=f'Survey database tables missing. <a href="/init-survey-db">Click here to initialize the database</a>. Error: {analytics_error}'), 500
+            else:
+                raise analytics_error
 
         return render_template('survey_dashboard.html',
                              overview=overview,
@@ -594,7 +607,8 @@ def survey_dashboard():
                              respondent_analysis=respondent_analysis,
                              completion_stats=completion_stats)
     except Exception as e:
-        return render_template('error.html', error=str(e)), 500
+        logger.error(f"Survey dashboard error: {e}")
+        return render_template('error.html', error=f'Survey dashboard error: {str(e)}'), 500
 
 @app.route('/surveys/analytics')
 def survey_analytics():
@@ -602,12 +616,24 @@ def survey_analytics():
     try:
         if not os.path.exists(SURVEY_DB_PATH):
             return render_template('error.html',
-                                 error='Normalized survey database not found. Please run survey_normalizer.py first.'), 404
+                                 error=f'Survey database not found. <a href="/init-survey-db">Initialize database</a>'), 404
+
+        if not analytics:
+            return render_template('error.html',
+                                 error='Survey analytics not available.'), 500
 
         survey_id = request.args.get('survey_id', type=int)
-        question_analytics = analytics.get_question_analytics(survey_id)
-        time_series = analytics.get_time_series_data(30)
-        activity = analytics.get_response_activity(30)
+
+        try:
+            question_analytics = analytics.get_question_analytics(survey_id)
+            time_series = analytics.get_time_series_data(30)
+            activity = analytics.get_response_activity(30)
+        except Exception as analytics_error:
+            if 'no such table' in str(analytics_error).lower():
+                return render_template('error.html',
+                                     error=f'Survey database tables missing. <a href="/init-survey-db">Initialize database</a>'), 500
+            else:
+                raise analytics_error
 
         return render_template('survey_analytics.html',
                              question_analytics=question_analytics,
@@ -615,6 +641,7 @@ def survey_analytics():
                              activity=activity,
                              selected_survey_id=survey_id)
     except Exception as e:
+        logger.error(f"Survey analytics error: {e}")
         return render_template('error.html', error=str(e)), 500
 
 @app.route('/surveys/responses')
@@ -1556,6 +1583,155 @@ def fix_data_schema():
                 results['steps'].append(f"Raw data rows: {before_count} → {after_count}")
                 if errors:
                     results['steps'].append(f"Import errors: {errors}")
+
+        results['status'] = 'completed'
+        return jsonify(results)
+
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'status': 'failed',
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+@app.route('/init-survey-db')
+def init_survey_database():
+    """Initialize the survey normalized database."""
+    try:
+        import sqlite3
+
+        results = {
+            'status': 'started',
+            'timestamp': datetime.now().isoformat(),
+            'steps': []
+        }
+
+        # Check if survey database exists
+        survey_db_exists = os.path.exists(SURVEY_DB_PATH)
+        results['steps'].append(f"Survey DB exists: {survey_db_exists}")
+
+        # Create survey database with required tables
+        with sqlite3.connect(SURVEY_DB_PATH) as conn:
+            cursor = conn.cursor()
+
+            # Create surveys table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS surveys (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    survey_name TEXT NOT NULL,
+                    survey_type TEXT NOT NULL,
+                    spreadsheet_id TEXT NOT NULL,
+                    description TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(spreadsheet_id)
+                )
+            ''')
+            results['steps'].append("Created surveys table")
+
+            # Create survey_questions table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS survey_questions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    survey_id INTEGER NOT NULL,
+                    question_key TEXT NOT NULL,
+                    question_text TEXT,
+                    question_type TEXT DEFAULT 'text',
+                    question_order INTEGER,
+                    is_required BOOLEAN DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (survey_id) REFERENCES surveys (id),
+                    UNIQUE(survey_id, question_key)
+                )
+            ''')
+            results['steps'].append("Created survey_questions table")
+
+            # Create other required tables
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS respondents (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    respondent_hash TEXT UNIQUE NOT NULL,
+                    browser TEXT,
+                    device TEXT,
+                    ip_address TEXT,
+                    user_agent TEXT,
+                    first_response_date TIMESTAMP,
+                    last_response_date TIMESTAMP,
+                    total_responses INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            results['steps'].append("Created respondents table")
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS survey_responses (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    survey_id INTEGER NOT NULL,
+                    respondent_id INTEGER NOT NULL,
+                    response_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    is_complete BOOLEAN DEFAULT 0,
+                    completion_time_seconds INTEGER,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (survey_id) REFERENCES surveys (id),
+                    FOREIGN KEY (respondent_id) REFERENCES respondents (id)
+                )
+            ''')
+            results['steps'].append("Created survey_responses table")
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS survey_answers (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    response_id INTEGER NOT NULL,
+                    question_id INTEGER NOT NULL,
+                    answer_text TEXT,
+                    answer_numeric REAL,
+                    answer_boolean BOOLEAN,
+                    answer_date TIMESTAMP,
+                    is_empty BOOLEAN DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (response_id) REFERENCES survey_responses (id),
+                    FOREIGN KEY (question_id) REFERENCES survey_questions (id),
+                    UNIQUE(response_id, question_id)
+                )
+            ''')
+            results['steps'].append("Created survey_answers table")
+
+            conn.commit()
+
+            # Check if we can import survey data
+            if os.path.exists('railway_survey_import.sql'):
+                results['steps'].append("Found survey import file")
+
+                # Import survey data
+                with open('railway_survey_import.sql', 'r') as f:
+                    sql_content = f.read()
+                    statements = sql_content.split(';')
+                    imported = 0
+
+                    for statement in statements:
+                        statement = statement.strip()
+                        if statement and not statement.startswith('--'):
+                            try:
+                                cursor.execute(statement)
+                                imported += 1
+                            except Exception as e:
+                                if 'already exists' not in str(e) and 'UNIQUE constraint failed' not in str(e):
+                                    results['steps'].append(f"Import warning: {str(e)[:100]}")
+
+                    conn.commit()
+                    results['steps'].append(f"Imported {imported} SQL statements")
+
+            # Verify tables exist
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tables = [row[0] for row in cursor.fetchall()]
+            results['steps'].append(f"Tables created: {tables}")
+
+            # Count records
+            for table in ['surveys', 'survey_questions', 'survey_responses']:
+                if table in tables:
+                    cursor.execute(f"SELECT COUNT(*) FROM {table}")
+                    count = cursor.fetchone()[0]
+                    results['steps'].append(f"{table}: {count} records")
 
         results['status'] = 'completed'
         return jsonify(results)
