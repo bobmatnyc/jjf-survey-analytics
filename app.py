@@ -2723,6 +2723,7 @@ def import_raw_data_postgresql():
         return jsonify({'error': 'PostgreSQL not configured'}), 400
 
     try:
+        import json
         results = {
             'status': 'started',
             'timestamp': datetime.now().isoformat(),
@@ -2817,9 +2818,41 @@ def import_raw_data_postgresql():
 
                 sample_data_count = 0
                 for i, sheet_id in enumerate(spreadsheet_ids):
-                    # Create sample raw data entries for each spreadsheet
+                    # Create realistic sample raw data entries for each spreadsheet
                     for row_num in range(1, 8):  # 7 rows per spreadsheet = 42 total
-                        sample_json = f'{{"sample_field_{row_num}": "Sample data for {sheet_id}", "row": {row_num}, "sheet_index": {i}}}'
+
+                        # Create realistic survey data based on sheet type
+                        if 'Assessment' in str(sheet_id):
+                            sample_json = json.dumps({
+                                f"Q{row_num}_Rating": f"{3 + (row_num % 3)}/5",  # Answer: rating
+                                f"Q{row_num}_Question": f"How would you rate your organization's technology maturity in area {row_num}? (1-5 scale)",  # Question
+                                f"Q{row_num}_Comments": f"We are working on improving this area. Current challenges include budget and training.",  # Answer: comment
+                                f"Q{row_num}_Priority": f"High" if row_num % 2 == 0 else "Medium",  # Answer: priority
+                                "Timestamp": f"2025-09-{15 + (row_num % 10)} {10 + row_num}:{20 + (row_num * 5)}:00",
+                                "Respondent": f"User_{i}_{row_num}"
+                            })
+                        elif 'Survey' in str(sheet_id):
+                            sample_json = json.dumps({
+                                f"Name": f"John Doe {row_num}",  # Answer: name
+                                f"Email": f"user{row_num}@company.com",  # Answer: email
+                                f"Role_Question": f"What is your primary role in the organization?",  # Question
+                                f"Role_Answer": f"{'Manager' if row_num % 2 == 0 else 'Developer'}",  # Answer
+                                f"Experience_Question": f"How many years of experience do you have in technology?",  # Question
+                                f"Experience_Answer": f"{5 + row_num} years",  # Answer
+                                f"Satisfaction": f"{'Very Satisfied' if row_num % 3 == 0 else 'Satisfied'}",  # Answer
+                                "Submitted": f"2025-09-{20 + (row_num % 5)} {14 + row_num}:30:00"
+                            })
+                        else:  # Inventory
+                            sample_json = json.dumps({
+                                f"System_Name": f"System_{row_num}",  # Answer: system name
+                                f"System_Type_Question": f"What type of system is this? (Select from: Database, Application, Infrastructure)",  # Question
+                                f"System_Type_Answer": f"{'Database' if row_num % 3 == 0 else 'Application'}",  # Answer
+                                f"Status": f"{'Active' if row_num % 2 == 0 else 'Maintenance'}",  # Answer
+                                f"Last_Updated": f"2025-09-{10 + row_num}",  # Answer
+                                f"Owner": f"Team_{chr(65 + (row_num % 3))}",  # Answer: team name
+                                f"Criticality_Question": f"How critical is this system to business operations? (High/Medium/Low)",  # Question
+                                f"Criticality_Answer": f"{'High' if row_num % 2 == 0 else 'Medium'}"  # Answer
+                            })
 
                         cursor.execute('''
                             INSERT INTO raw_data
