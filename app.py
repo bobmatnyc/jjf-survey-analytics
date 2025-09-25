@@ -3032,9 +3032,16 @@ def refresh_sample_data():
             # Get spreadsheet IDs and titles
             cursor.execute('SELECT spreadsheet_id, title FROM spreadsheets')
             spreadsheets = cursor.fetchall()
+            results['steps'].append(f'Found {len(spreadsheets)} spreadsheets')
 
             sample_data_count = 0
-            for sheet_id, title in spreadsheets:
+            for row in spreadsheets:
+                if db.use_postgresql:
+                    sheet_id = row['spreadsheet_id']
+                    title = row['title']
+                else:
+                    sheet_id = row[0]
+                    title = row[1]
                 # Create realistic sample raw data entries for each spreadsheet
                 for row_num in range(1, 8):  # 7 rows per spreadsheet = 42 total
 
