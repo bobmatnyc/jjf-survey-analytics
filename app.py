@@ -3008,6 +3008,89 @@ def debug_raw_data():
             'timestamp': datetime.now().isoformat()
         }), 500
 
+@app.route('/refresh-sample-data')
+def refresh_sample_data():
+    """Replace existing raw data with realistic sample data showing questions and answers."""
+    if not USE_POSTGRESQL:
+        return jsonify({'error': 'PostgreSQL not configured'}), 400
+
+    try:
+        import json
+        results = {
+            'status': 'started',
+            'timestamp': datetime.now().isoformat(),
+            'steps': []
+        }
+
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+
+            # Clear existing raw data
+            cursor.execute('DELETE FROM raw_data')
+            results['steps'].append('Cleared existing raw data')
+
+            # Get spreadsheet IDs and titles
+            cursor.execute('SELECT spreadsheet_id, title FROM spreadsheets')
+            spreadsheets = cursor.fetchall()
+
+            sample_data_count = 0
+            for sheet_id, title in spreadsheets:
+                # Create realistic sample raw data entries for each spreadsheet
+                for row_num in range(1, 8):  # 7 rows per spreadsheet = 42 total
+
+                    # Create realistic survey data based on sheet title
+                    if 'Assessment' in title:
+                        sample_json = json.dumps({
+                            f"Q{row_num}_Rating": f"{3 + (row_num % 3)}/5",  # Answer: rating
+                            f"Q{row_num}_Question": f"How would you rate your organization's technology maturity in area {row_num}? (1-5 scale)",  # Question
+                            f"Q{row_num}_Comments": f"We are working on improving this area. Current challenges include budget and training.",  # Answer: comment
+                            f"Q{row_num}_Priority": f"High" if row_num % 2 == 0 else "Medium",  # Answer: priority
+                            "Timestamp": f"2025-09-{15 + (row_num % 10)} {10 + row_num}:{20 + (row_num * 5)}:00",
+                            "Respondent": f"Assessment_User_{row_num}"
+                        })
+                    elif 'Survey' in title:
+                        sample_json = json.dumps({
+                            f"Name": f"Survey Respondent {row_num}",  # Answer: name
+                            f"Email": f"user{row_num}@company.com",  # Answer: email
+                            f"Role_Question": f"What is your primary role in the organization?",  # Question
+                            f"Role_Answer": f"{'Manager' if row_num % 2 == 0 else 'Developer'}",  # Answer
+                            f"Experience_Question": f"How many years of experience do you have in technology?",  # Question
+                            f"Experience_Answer": f"{5 + row_num} years",  # Answer
+                            f"Satisfaction": f"{'Very Satisfied' if row_num % 3 == 0 else 'Satisfied'}",  # Answer
+                            "Submitted": f"2025-09-{20 + (row_num % 5)} {14 + row_num}:30:00"
+                        })
+                    else:  # Inventory
+                        sample_json = json.dumps({
+                            f"System_Name": f"System_{row_num}",  # Answer: system name
+                            f"System_Type_Question": f"What type of system is this? (Select from: Database, Application, Infrastructure)",  # Question
+                            f"System_Type_Answer": f"{'Database' if row_num % 3 == 0 else 'Application'}",  # Answer
+                            f"Status": f"{'Active' if row_num % 2 == 0 else 'Maintenance'}",  # Answer
+                            f"Last_Updated": f"2025-09-{10 + row_num}",  # Answer
+                            f"Owner": f"Team_{chr(65 + (row_num % 3))}",  # Answer: team name
+                            f"Criticality_Question": f"How critical is this system to business operations? (High/Medium/Low)",  # Question
+                            f"Criticality_Answer": f"{'High' if row_num % 2 == 0 else 'Medium'}"  # Answer
+                        })
+
+                    cursor.execute('''
+                        INSERT INTO raw_data
+                        (spreadsheet_id, row_number, data_json, created_at)
+                        VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
+                    ''', (sheet_id, row_num, sample_json))
+                    sample_data_count += 1
+
+            conn.commit()
+            results['steps'].append(f'Created {sample_data_count} realistic sample data entries')
+
+        results['status'] = 'completed'
+        return jsonify(results)
+
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'status': 'failed',
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
 @app.template_filter('datetime')
 def datetime_filter(value):
     """Format datetime strings."""
