@@ -50,23 +50,12 @@ class SurveyAnalytics:
             total_possible_answers = total_responses * total_questions if total_questions > 0 else 0
             response_rate = (answered_questions / total_possible_answers * 100) if total_possible_answers > 0 else 0
             
-            # Recent activity - use created_at if response_date doesn't exist
-            try:
-                cursor.execute('''
-                    SELECT COUNT(*) as count
-                    FROM survey_responses
-                    WHERE response_date >= datetime('now', '-7 days')
-                ''')
-            except Exception as e:
-                if 'no such column' in str(e).lower():
-                    # Fallback to created_at column
-                    cursor.execute('''
-                        SELECT COUNT(*) as count
-                        FROM survey_responses
-                        WHERE created_at >= datetime('now', '-7 days')
-                    ''')
-                else:
-                    raise
+            # Recent activity - use COALESCE for compatibility
+            cursor.execute('''
+                SELECT COUNT(*) as count
+                FROM survey_responses
+                WHERE COALESCE(response_date, created_at) >= datetime('now', '-7 days')
+            ''')
             recent_responses = cursor.fetchone()['count']
             
             return {
