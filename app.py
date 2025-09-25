@@ -2611,6 +2611,66 @@ def migrate_to_postgresql():
             'timestamp': datetime.now().isoformat()
         }), 500
 
+@app.route('/check-database-config')
+def check_database_config():
+    """Check database configuration and environment variables."""
+    try:
+        env_vars = {
+            'DATABASE_URL': os.getenv('DATABASE_URL'),
+            'PGHOST': os.getenv('PGHOST'),
+            'PGPORT': os.getenv('PGPORT'),
+            'PGDATABASE': os.getenv('PGDATABASE'),
+            'PGUSER': os.getenv('PGUSER'),
+            'PGPASSWORD': '***' if os.getenv('PGPASSWORD') else None,
+            'RAILWAY_ENVIRONMENT': os.getenv('RAILWAY_ENVIRONMENT'),
+            'RAILWAY_SERVICE_NAME': os.getenv('RAILWAY_SERVICE_NAME')
+        }
+
+        # Check if any PostgreSQL-related env vars exist
+        pg_vars = {k: v for k, v in env_vars.items() if k.startswith('PG') or k == 'DATABASE_URL'}
+        has_pg_config = any(v is not None for v in pg_vars.values())
+
+        config_status = {
+            'timestamp': datetime.now().isoformat(),
+            'current_database': 'PostgreSQL' if USE_POSTGRESQL else 'SQLite',
+            'database_url_configured': DATABASE_URL is not None,
+            'database_url_preview': DATABASE_URL[:50] + '...' if DATABASE_URL else None,
+            'postgresql_vars': pg_vars,
+            'has_postgresql_config': has_pg_config,
+            'environment_vars': env_vars,
+            'use_postgresql_flag': USE_POSTGRESQL
+        }
+
+        # Test database connection
+        try:
+            if USE_POSTGRESQL:
+                with db.get_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute('SELECT version()')
+                    version = cursor.fetchone()
+                    config_status['database_test'] = {
+                        'status': 'success',
+                        'version': str(version[0]) if version else 'unknown'
+                    }
+            else:
+                config_status['database_test'] = {
+                    'status': 'using_sqlite',
+                    'path': db.db_path
+                }
+        except Exception as e:
+            config_status['database_test'] = {
+                'status': 'error',
+                'error': str(e)
+            }
+
+        return jsonify(config_status)
+
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
 @app.template_filter('datetime')
 def datetime_filter(value):
     """Format datetime strings."""
