@@ -443,20 +443,36 @@ class DatabaseManager:
                 cursor = conn.cursor()
 
                 # Get latest raw data entries with spreadsheet info
-                cursor.execute('''
-                    SELECT
-                        rd.id,
-                        rd.row_number,
-                        rd.created_at,
-                        s.title as spreadsheet_title,
-                        s.sheet_type,
-                        s.spreadsheet_id,
-                        rd.data_json
-                    FROM raw_data rd
-                    JOIN spreadsheets s ON rd.spreadsheet_id = s.spreadsheet_id
-                    ORDER BY rd.created_at DESC
-                    LIMIT ?
-                ''', (limit,))
+                if self.use_postgresql:
+                    cursor.execute('''
+                        SELECT
+                            rd.id,
+                            rd.row_number,
+                            rd.created_at,
+                            s.title as spreadsheet_title,
+                            s.sheet_type,
+                            s.spreadsheet_id,
+                            rd.data_json
+                        FROM raw_data rd
+                        JOIN spreadsheets s ON rd.spreadsheet_id = s.spreadsheet_id
+                        ORDER BY rd.created_at DESC
+                        LIMIT %s
+                    ''', (limit,))
+                else:
+                    cursor.execute('''
+                        SELECT
+                            rd.id,
+                            rd.row_number,
+                            rd.created_at,
+                            s.title as spreadsheet_title,
+                            s.sheet_type,
+                            s.spreadsheet_id,
+                            rd.data_json
+                        FROM raw_data rd
+                        JOIN spreadsheets s ON rd.spreadsheet_id = s.spreadsheet_id
+                        ORDER BY rd.created_at DESC
+                        LIMIT ?
+                    ''', (limit,))
 
                 updates = []
                 for row in cursor.fetchall():
@@ -2872,6 +2888,61 @@ def init_postgresql_surveys():
         return jsonify({
             'error': str(e),
             'status': 'failed',
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+@app.route('/debug-raw-data')
+def debug_raw_data():
+    """Debug raw data to see what's in the PostgreSQL database."""
+    try:
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+
+            # Check raw_data table structure and content
+            cursor.execute('SELECT COUNT(*) FROM raw_data')
+            total_count = cursor.fetchone()[0]
+
+            # Get sample raw data
+            cursor.execute('SELECT * FROM raw_data LIMIT 5')
+            sample_data = []
+            for row in cursor.fetchall():
+                if db.use_postgresql:
+                    sample_data.append(dict(row))
+                else:
+                    sample_data.append(dict(row))
+
+            # Check if we can join with spreadsheets
+            cursor.execute('''
+                SELECT
+                    rd.id,
+                    rd.spreadsheet_id,
+                    rd.row_number,
+                    rd.created_at,
+                    s.title
+                FROM raw_data rd
+                LEFT JOIN spreadsheets s ON rd.spreadsheet_id = s.spreadsheet_id
+                LIMIT 5
+            ''')
+
+            joined_data = []
+            for row in cursor.fetchall():
+                if db.use_postgresql:
+                    joined_data.append(dict(row))
+                else:
+                    joined_data.append(dict(row))
+
+            return jsonify({
+                'status': 'success',
+                'database_type': 'PostgreSQL' if db.use_postgresql else 'SQLite',
+                'total_raw_data_count': total_count,
+                'sample_raw_data': sample_data,
+                'joined_sample': joined_data,
+                'timestamp': datetime.now().isoformat()
+            })
+
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
             'timestamp': datetime.now().isoformat()
         }), 500
 
