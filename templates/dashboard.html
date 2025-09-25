@@ -215,22 +215,63 @@
                         <!-- Data Changes Preview -->
                         <div class="text-xs text-gray-600 space-y-1">
                             {% if update.key_value_pairs %}
-                                <div class="bg-gray-50 rounded p-2 space-y-1">
+                                <div class="bg-gray-50 rounded p-2 space-y-2">
                                     <p class="font-medium text-gray-700 mb-1">Data Added:</p>
-                                    {% for pair in update.key_value_pairs[:3] %}
-                                    <div class="flex">
-                                        <span class="font-medium text-gray-600 min-w-0 flex-shrink-0 mr-2">{{ pair.key|truncate(15) }}:</span>
-                                        <span class="text-gray-800 min-w-0 flex-1 break-words">
-                                            {% if pair.value|length > 80 %}
-                                                {{ pair.value[:77] }}...
-                                            {% else %}
-                                                {{ pair.value }}
-                                            {% endif %}
-                                        </span>
+
+                                    <!-- Show answers first -->
+                                    {% set answers = [] %}
+                                    {% set questions = [] %}
+                                    {% for pair in update.key_value_pairs %}
+                                        {% if pair.is_question %}
+                                            {% set _ = questions.append(pair) %}
+                                        {% else %}
+                                            {% set _ = answers.append(pair) %}
+                                        {% endif %}
+                                    {% endfor %}
+
+                                    <!-- Display answers (user responses) -->
+                                    {% for pair in answers[:2] %}
+                                    <div class="border-l-2 border-green-400 pl-2">
+                                        <div class="flex items-start">
+                                            <span class="inline-block bg-green-100 text-green-800 text-xs px-1 rounded mr-2 flex-shrink-0">Answer</span>
+                                            <div class="min-w-0 flex-1">
+                                                <p class="font-medium text-gray-700 text-xs">{{ pair.key|replace('_', ' ')|replace('-', ' ')|title }}</p>
+                                                <p class="text-gray-800 text-xs break-words">
+                                                    {% if pair.value|length > 100 %}
+                                                        {{ pair.value[:97] }}...
+                                                    {% else %}
+                                                        {{ pair.value }}
+                                                    {% endif %}
+                                                </p>
+                                            </div>
+                                        </div>
                                     </div>
                                     {% endfor %}
-                                    {% if update.key_value_pairs|length > 3 %}
-                                    <p class="text-gray-500 italic">+ {{ update.key_value_pairs|length - 3 }} more fields</p>
+
+                                    <!-- Display questions (if no answers or space remaining) -->
+                                    {% if answers|length == 0 %}
+                                        {% for pair in questions[:2] %}
+                                        <div class="border-l-2 border-blue-400 pl-2">
+                                            <div class="flex items-start">
+                                                <span class="inline-block bg-blue-100 text-blue-800 text-xs px-1 rounded mr-2 flex-shrink-0">Question</span>
+                                                <div class="min-w-0 flex-1">
+                                                    <p class="font-medium text-gray-700 text-xs">{{ pair.key|replace('_', ' ')|replace('-', ' ')|title }}</p>
+                                                    <p class="text-gray-600 text-xs break-words italic">
+                                                        {% if pair.value|length > 80 %}
+                                                            {{ pair.value[:77] }}...
+                                                        {% else %}
+                                                            {{ pair.value }}
+                                                        {% endif %}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                    {% endif %}
+
+                                    {% set total_shown = (answers[:2]|length) + (questions[:2]|length if answers|length == 0 else 0) %}
+                                    {% if update.key_value_pairs|length > total_shown %}
+                                    <p class="text-gray-500 italic text-xs">+ {{ update.key_value_pairs|length - total_shown }} more fields</p>
                                     {% endif %}
                                 </div>
                             {% else %}
@@ -245,11 +286,18 @@
                                     <i class="fas fa-chevron-down mr-1" id="icon-update-{{ update.id }}"></i>
                                     View All {{ update.data_count }} Fields
                                 </button>
-                                <div id="details-update-{{ update.id }}" class="hidden mt-2 bg-gray-50 rounded p-2 space-y-1 max-h-32 overflow-y-auto">
+                                <div id="details-update-{{ update.id }}" class="hidden mt-2 bg-gray-50 rounded p-2 space-y-2 max-h-40 overflow-y-auto">
                                     {% for pair in update.key_value_pairs %}
-                                    <div class="flex text-xs">
-                                        <span class="font-medium text-gray-600 min-w-0 flex-shrink-0 mr-2">{{ pair.key }}:</span>
-                                        <span class="text-gray-800 min-w-0 flex-1 break-words">{{ pair.value }}</span>
+                                    <div class="border-l-2 {{ 'border-green-400' if not pair.is_question else 'border-blue-400' }} pl-2">
+                                        <div class="flex items-start">
+                                            <span class="inline-block {{ 'bg-green-100 text-green-800' if not pair.is_question else 'bg-blue-100 text-blue-800' }} text-xs px-1 rounded mr-2 flex-shrink-0">
+                                                {{ 'Answer' if not pair.is_question else 'Question' }}
+                                            </span>
+                                            <div class="min-w-0 flex-1">
+                                                <p class="font-medium text-gray-700 text-xs">{{ pair.key|replace('_', ' ')|replace('-', ' ')|title }}</p>
+                                                <p class="text-gray-800 text-xs break-words {{ 'italic text-gray-600' if pair.is_question else '' }}">{{ pair.value }}</p>
+                                            </div>
+                                        </div>
                                     </div>
                                     {% endfor %}
                                     {% if update.has_more_data %}

@@ -488,28 +488,57 @@ class DatabaseManager:
                         for key, value in data.items():
                             if value and str(value).strip():
                                 clean_value = str(value).strip()
+
+                                # Determine if this looks like a question or an answer
+                                is_question = (
+                                    len(clean_value) > 50 and
+                                    ('?' in clean_value or 'Select' in clean_value or 'describe' in clean_value.lower())
+                                )
+
                                 # Store full key-value pairs for detailed view
                                 key_value_pairs.append({
                                     'key': key,
                                     'value': clean_value,
-                                    'truncated': len(clean_value) > 100
+                                    'truncated': len(clean_value) > 100,
+                                    'is_question': is_question
                                 })
 
-                                # Create preview (shorter for overview)
+                                # Create preview - prioritize answers over questions
                                 if len(preview_items) < 4:
-                                    if len(clean_value) > 60:
-                                        preview_value = clean_value[:57] + "..."
+                                    if is_question:
+                                        # For questions, show a shortened version
+                                        if len(clean_value) > 80:
+                                            preview_value = clean_value[:77] + "..."
+                                        else:
+                                            preview_value = clean_value
+
+                                        # Clean up field names for display
+                                        display_key = key.replace('_', ' ').replace('-', ' ').title()
+                                        if len(display_key) > 15:
+                                            display_key = display_key[:12] + "..."
+
+                                        preview_items.append(f"**Q: {display_key}**: {preview_value}")
                                     else:
-                                        preview_value = clean_value
+                                        # For answers, show the full value (these are usually shorter)
+                                        if len(clean_value) > 60:
+                                            preview_value = clean_value[:57] + "..."
+                                        else:
+                                            preview_value = clean_value
 
-                                    # Clean up field names for display
-                                    display_key = key.replace('_', ' ').title()
-                                    if len(display_key) > 20:
-                                        display_key = display_key[:17] + "..."
+                                        # Clean up field names for display
+                                        display_key = key.replace('_', ' ').replace('-', ' ').title()
+                                        if len(display_key) > 15:
+                                            display_key = display_key[:12] + "..."
 
-                                    preview_items.append(f"**{display_key}**: {preview_value}")
+                                        preview_items.append(f"**A: {display_key}**: {preview_value}")
 
-                        preview = " • ".join(preview_items) if preview_items else "No data available"
+                        # Sort preview items to show answers first, then questions
+                        answer_items = [item for item in preview_items if item.startswith("**A:")]
+                        question_items = [item for item in preview_items if item.startswith("**Q:")]
+
+                        # Combine with answers first
+                        combined_items = answer_items + question_items
+                        preview = " • ".join(combined_items[:4]) if combined_items else "No data available"
 
                         updates.append({
                             'id': row['id'],
