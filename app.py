@@ -608,9 +608,9 @@ def survey_dashboard():
                     cursor.execute("SELECT COUNT(*) FROM survey_questions")
                     question_count = cursor.fetchone()[0]
 
-                    # Get basic survey list
-                    cursor.execute("SELECT survey_name, survey_type FROM surveys LIMIT 10")
-                    surveys = [{'survey_name': row[0], 'survey_type': row[1]} for row in cursor.fetchall()]
+                    # Get basic survey list using correct column names
+                    cursor.execute("SELECT title, description FROM surveys LIMIT 10")
+                    surveys = [{'survey_name': row[0] or 'Untitled Survey', 'survey_type': 'survey'} for row in cursor.fetchall()]
 
                 # Create basic overview data
                 overview = {
@@ -1993,11 +1993,16 @@ def test_survey_dashboard():
                     cursor.execute("SELECT COUNT(*) FROM survey_questions")
                     question_count = cursor.fetchone()[0]
 
+                # Get survey titles using correct column names
+                cursor.execute("SELECT title FROM surveys LIMIT 5")
+                survey_titles = [row[0] for row in cursor.fetchall() if row[0]]
+
                 result = {
                     'status': 'schema_mismatch_handled',
                     'basic_data': {
                         'total_surveys': survey_count,
-                        'total_questions': question_count
+                        'total_questions': question_count,
+                        'sample_surveys': survey_titles
                     },
                     'message': 'Using basic data due to schema differences',
                     'original_error': str(analytics_error)
@@ -2014,6 +2019,63 @@ def test_survey_dashboard():
         return jsonify({
             'error': str(e),
             'status': 'failed',
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+@app.route('/simple-survey-info')
+def simple_survey_info():
+    """Get basic survey information without using analytics module."""
+    try:
+        if not os.path.exists(SURVEY_DB_PATH):
+            return jsonify({
+                'error': 'Survey database not found',
+                'init_url': '/init-survey-db'
+            }), 404
+
+        import sqlite3
+        with sqlite3.connect(SURVEY_DB_PATH) as conn:
+            cursor = conn.cursor()
+
+            # Get basic counts
+            cursor.execute("SELECT COUNT(*) FROM surveys")
+            survey_count = cursor.fetchone()[0]
+
+            cursor.execute("SELECT COUNT(*) FROM survey_questions")
+            question_count = cursor.fetchone()[0]
+
+            cursor.execute("SELECT COUNT(*) FROM survey_responses")
+            response_count = cursor.fetchone()[0]
+
+            # Get survey list
+            cursor.execute("SELECT id, title, description, created_at FROM surveys ORDER BY created_at DESC LIMIT 10")
+            surveys = []
+            for row in cursor.fetchall():
+                surveys.append({
+                    'id': row[0],
+                    'title': row[1] or 'Untitled Survey',
+                    'description': row[2] or 'No description',
+                    'created_at': row[3]
+                })
+
+            # Get recent questions
+            cursor.execute("SELECT question_text FROM survey_questions WHERE question_text IS NOT NULL LIMIT 5")
+            sample_questions = [row[0] for row in cursor.fetchall()]
+
+            return jsonify({
+                'status': 'success',
+                'summary': {
+                    'total_surveys': survey_count,
+                    'total_questions': question_count,
+                    'total_responses': response_count
+                },
+                'surveys': surveys,
+                'sample_questions': sample_questions,
+                'timestamp': datetime.now().isoformat()
+            })
+
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
             'timestamp': datetime.now().isoformat()
         }), 500
 
