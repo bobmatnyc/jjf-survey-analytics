@@ -3189,6 +3189,65 @@ def refresh_sample_data():
             'timestamp': datetime.now().isoformat()
         }), 500
 
+@app.route('/debug-survey-schema')
+def debug_survey_schema():
+    """Debug survey database schema to see actual column names."""
+    try:
+        results = {
+            'status': 'success',
+            'timestamp': datetime.now().isoformat(),
+            'tables': {}
+        }
+
+        if USE_POSTGRESQL:
+            # Check PostgreSQL survey tables
+            with db.get_connection() as conn:
+                cursor = conn.cursor()
+
+                # Get survey table columns
+                for table_name in ['surveys', 'survey_questions', 'survey_responses', 'survey_answers']:
+                    cursor.execute("""
+                        SELECT column_name, data_type
+                        FROM information_schema.columns
+                        WHERE table_name = %s AND table_schema = 'public'
+                        ORDER BY ordinal_position
+                    """, (table_name,))
+
+                    columns = []
+                    for row in cursor.fetchall():
+                        columns.append({
+                            'name': row['column_name'] if db.use_postgresql else row[0],
+                            'type': row['data_type'] if db.use_postgresql else row[1]
+                        })
+                    results['tables'][table_name] = columns
+        else:
+            # Check SQLite survey tables
+            import sqlite3
+            with sqlite3.connect(SURVEY_DB_PATH) as conn:
+                cursor = conn.cursor()
+
+                # Get all table names
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+                table_names = [row[0] for row in cursor.fetchall()]
+
+                for table_name in table_names:
+                    cursor.execute(f"PRAGMA table_info({table_name})")
+                    columns = []
+                    for row in cursor.fetchall():
+                        columns.append({
+                            'name': row[1],  # column name
+                            'type': row[2]   # column type
+                        })
+                    results['tables'][table_name] = columns
+
+        return jsonify(results)
+
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
 @app.template_filter('datetime')
 def datetime_filter(value):
     """Format datetime strings."""
