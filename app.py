@@ -773,21 +773,10 @@ def survey_dashboard():
 
         # Try to get analytics data with error handling
         try:
-            print("🔍 Getting survey overview...")
             overview = analytics.get_survey_overview()
-            print("✅ Survey overview successful")
-
-            print("🔍 Getting survey breakdown...")
             survey_breakdown = analytics.get_survey_breakdown()
-            print("✅ Survey breakdown successful")
-
-            print("🔍 Getting respondent analysis...")
             respondent_analysis = analytics.get_respondent_analysis()
-            print("✅ Respondent analysis successful")
-
-            print("🔍 Getting completion stats...")
             completion_stats = analytics.get_survey_completion_stats()
-            print("✅ Completion stats successful")
         except Exception as analytics_error:
             if 'no such table' in str(analytics_error).lower():
                 return render_template('error.html',
