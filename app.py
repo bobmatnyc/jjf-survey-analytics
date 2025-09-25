@@ -78,6 +78,15 @@ def async_route(f):
 DB_PATH = 'surveyor_data_improved.db'
 SURVEY_DB_PATH = 'survey_normalized.db'
 
+# Check if we should use PostgreSQL (Railway production)
+DATABASE_URL = os.getenv('DATABASE_URL')
+USE_POSTGRESQL = DATABASE_URL is not None
+
+if USE_POSTGRESQL:
+    print(f"🐘 Using PostgreSQL database: {DATABASE_URL[:50]}...")
+else:
+    print(f"📁 Using SQLite databases: {DB_PATH}, {SURVEY_DB_PATH}")
+
 class DatabaseManager:
     """Handle database operations for the web app."""
     
@@ -2137,6 +2146,201 @@ def test_survey_route():
         return jsonify({
             'status': 'route_error',
             'error': str(e)
+        }), 500
+
+@app.route('/backup-data')
+def backup_data():
+    """Create a backup of current database data."""
+    try:
+        import sqlite3
+        import json
+
+        backup_data = {
+            'timestamp': datetime.now().isoformat(),
+            'spreadsheets': [],
+            'raw_data': [],
+            'extraction_jobs': []
+        }
+
+        # Backup main database
+        if os.path.exists(DB_PATH):
+            with sqlite3.connect(DB_PATH) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+
+                # Backup spreadsheets
+                cursor.execute("SELECT * FROM spreadsheets")
+                backup_data['spreadsheets'] = [dict(row) for row in cursor.fetchall()]
+
+                # Backup raw_data
+                cursor.execute("SELECT * FROM raw_data")
+                backup_data['raw_data'] = [dict(row) for row in cursor.fetchall()]
+
+                # Backup extraction_jobs
+                cursor.execute("SELECT * FROM extraction_jobs")
+                backup_data['extraction_jobs'] = [dict(row) for row in cursor.fetchall()]
+
+        # Save backup to a JSON file that gets committed to git
+        backup_filename = 'data_backup.json'
+        with open(backup_filename, 'w') as f:
+            json.dump(backup_data, f, indent=2, default=str)
+
+        return jsonify({
+            'status': 'success',
+            'message': f'Data backed up to {backup_filename}',
+            'counts': {
+                'spreadsheets': len(backup_data['spreadsheets']),
+                'raw_data': len(backup_data['raw_data']),
+                'extraction_jobs': len(backup_data['extraction_jobs'])
+            },
+            'timestamp': backup_data['timestamp']
+        })
+
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+@app.route('/restore-from-backup')
+def restore_from_backup():
+    """Restore data from backup file."""
+    try:
+        import sqlite3
+        import json
+
+        backup_filename = 'data_backup.json'
+        if not os.path.exists(backup_filename):
+            return jsonify({
+                'error': f'Backup file {backup_filename} not found',
+                'available_files': os.listdir('.')
+            }), 404
+
+        # Load backup data
+        with open(backup_filename, 'r') as f:
+            backup_data = json.load(f)
+
+        results = {
+            'status': 'started',
+            'timestamp': datetime.now().isoformat(),
+            'backup_timestamp': backup_data.get('timestamp'),
+            'restored': {}
+        }
+
+        # Restore to main database
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.cursor()
+
+            # Create tables if they don't exist
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS spreadsheets (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    spreadsheet_id TEXT UNIQUE NOT NULL,
+                    title TEXT NOT NULL,
+                    url TEXT,
+                    sheet_type TEXT,
+                    description TEXT,
+                    last_synced TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS raw_data (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    spreadsheet_id TEXT NOT NULL,
+                    row_number INTEGER NOT NULL,
+                    data_json TEXT NOT NULL,
+                    data_hash TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (spreadsheet_id) REFERENCES spreadsheets (spreadsheet_id)
+                )
+            ''')
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS extraction_jobs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    job_name TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    total_spreadsheets INTEGER DEFAULT 0,
+                    processed_spreadsheets INTEGER DEFAULT 0,
+                    successful_spreadsheets INTEGER DEFAULT 0,
+                    total_rows INTEGER DEFAULT 0,
+                    processed_rows INTEGER DEFAULT 0,
+                    started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    completed_at TIMESTAMP,
+                    error_message TEXT
+                )
+            ''')
+
+            # Restore spreadsheets
+            restored_spreadsheets = 0
+            for sheet in backup_data.get('spreadsheets', []):
+                try:
+                    cursor.execute('''
+                        INSERT OR REPLACE INTO spreadsheets
+                        (spreadsheet_id, title, url, sheet_type, description, last_synced, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ''', (
+                        sheet['spreadsheet_id'], sheet['title'], sheet.get('url'),
+                        sheet.get('sheet_type'), sheet.get('description'),
+                        sheet.get('last_synced'), sheet.get('created_at')
+                    ))
+                    restored_spreadsheets += 1
+                except Exception as e:
+                    logger.warning(f"Error restoring spreadsheet {sheet.get('spreadsheet_id')}: {e}")
+
+            # Restore raw_data
+            restored_raw_data = 0
+            for row in backup_data.get('raw_data', []):
+                try:
+                    cursor.execute('''
+                        INSERT OR REPLACE INTO raw_data
+                        (spreadsheet_id, row_number, data_json, data_hash, created_at)
+                        VALUES (?, ?, ?, ?, ?)
+                    ''', (
+                        row['spreadsheet_id'], row['row_number'], row['data_json'],
+                        row.get('data_hash'), row.get('created_at')
+                    ))
+                    restored_raw_data += 1
+                except Exception as e:
+                    logger.warning(f"Error restoring raw_data row {row.get('id')}: {e}")
+
+            # Restore extraction_jobs
+            restored_jobs = 0
+            for job in backup_data.get('extraction_jobs', []):
+                try:
+                    cursor.execute('''
+                        INSERT OR REPLACE INTO extraction_jobs
+                        (job_name, status, total_spreadsheets, processed_spreadsheets,
+                         successful_spreadsheets, total_rows, processed_rows,
+                         started_at, completed_at, error_message)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (
+                        job['job_name'], job['status'], job.get('total_spreadsheets', 0),
+                        job.get('processed_spreadsheets', 0), job.get('successful_spreadsheets', 0),
+                        job.get('total_rows', 0), job.get('processed_rows', 0),
+                        job.get('started_at'), job.get('completed_at'), job.get('error_message')
+                    ))
+                    restored_jobs += 1
+                except Exception as e:
+                    logger.warning(f"Error restoring job {job.get('job_name')}: {e}")
+
+            conn.commit()
+
+            results['restored'] = {
+                'spreadsheets': restored_spreadsheets,
+                'raw_data': restored_raw_data,
+                'extraction_jobs': restored_jobs
+            }
+            results['status'] = 'completed'
+
+        return jsonify(results)
+
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
         }), 500
 
 @app.template_filter('datetime')
