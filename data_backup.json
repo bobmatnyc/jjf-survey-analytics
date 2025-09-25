@@ -1,0 +1,75 @@
+{
+  "timestamp": "2025-09-25T02:45:00.000000",
+  "spreadsheets": [
+    {
+      "id": 1,
+      "spreadsheet_id": "1h9AooI-E70v36EOxuErh4uYBg2TLbsF7X5kXdkrUkoQ",
+      "url": "https://docs.google.com/spreadsheets/d/1h9AooI-E70v36EOxuErh4uYBg2TLbsF7X5kXdkrUkoQ/edit?usp=sharing",
+      "title": "JJF Software Systems Inventory",
+      "sheet_type": "inventory",
+      "created_at": "2025-09-23 09:34:58",
+      "last_synced": "2025-09-23 05:34:58.572723"
+    },
+    {
+      "id": 2,
+      "spreadsheet_id": "1qEHKDVIO4YTR3TjMt336HdKLIBMV2cebAcvdbGOUdCU",
+      "url": "https://docs.google.com/spreadsheets/d/1qEHKDVIO4YTR3TjMt336HdKLIBMV2cebAcvdbGOUdCU/edit?usp=sharing",
+      "title": "JJF Tech Survey - Intake Form",
+      "sheet_type": "survey",
+      "created_at": "2025-09-23 09:35:00",
+      "last_synced": "2025-09-23 05:35:00.436297"
+    },
+    {
+      "id": 3,
+      "spreadsheet_id": "1fAAXXGOiDWc8lMVaRwqvuM2CDNAyNY_Px3usyisGhaw",
+      "url": "https://docs.google.com/spreadsheets/d/1fAAXXGOiDWc8lMVaRwqvuM2CDNAyNY_Px3usyisGhaw/edit?usp=sharing",
+      "title": "JJF Tech Survey - Links + Answer Sheet",
+      "sheet_type": "survey",
+      "created_at": "2025-09-23 09:35:02",
+      "last_synced": "2025-09-23 05:35:02.299639"
+    },
+    {
+      "id": 4,
+      "spreadsheet_id": "1-aw7gjjvRMQj89lstVBtKDZ67Cs-dO1SHNsp4scJ4II",
+      "url": "https://docs.google.com/spreadsheets/d/1-aw7gjjvRMQj89lstVBtKDZ67Cs-dO1SHNsp4scJ4II/edit?usp=sharing",
+      "title": "JJF Technology Maturity Assessment - CEO",
+      "sheet_type": "assessment",
+      "created_at": "2025-09-23 09:35:04",
+      "last_synced": "2025-09-23 05:35:04.627645"
+    },
+    {
+      "id": 5,
+      "spreadsheet_id": "1mQxcZ9U1UsVmHstgWdbHuT7bqfVXV4ZNCr9pn0TlVWM",
+      "url": "https://docs.google.com/spreadsheets/d/1mQxcZ9U1UsVmHstgWdbHuT7bqfVXV4ZNCr9pn0TlVWM/edit?usp=sharing",
+      "title": "JJF Technology Maturity Assessment - Staff",
+      "sheet_type": "assessment",
+      "created_at": "2025-09-23 09:35:06",
+      "last_synced": "2025-09-23 05:35:06.292543"
+    },
+    {
+      "id": 6,
+      "spreadsheet_id": "1f3NKqhNR-CJr_e6_eLSTLbSFuYY8Gm0dxpSL0mlybMA",
+      "url": "https://docs.google.com/spreadsheets/d/1f3NKqhNR-CJr_e6_eLSTLbSFuYY8Gm0dxpSL0mlybMA/edit?usp=sharing",
+      "title": "JJF Technology Maturity Assessment - Tech Lead",
+      "sheet_type": "assessment",
+      "created_at": "2025-09-23 09:35:07",
+      "last_synced": "2025-09-23 05:35:07.956088"
+    }
+  ],
+  "raw_data": [],
+  "extraction_jobs": [
+    {
+      "id": 1,
+      "job_name": "Manual Data Import",
+      "status": "completed",
+      "total_spreadsheets": 6,
+      "processed_spreadsheets": 6,
+      "successful_spreadsheets": 6,
+      "total_rows": 46,
+      "processed_rows": 46,
+      "started_at": "2025-09-23 09:34:58",
+      "completed_at": "2025-09-23 09:35:08",
+      "error_message": null
+    }
+  ]
+}
