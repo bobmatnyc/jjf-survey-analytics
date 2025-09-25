@@ -129,8 +129,11 @@ async function loadHealthStatus() {
         
         updateOverallStatus(data);
         updateCategoryStatuses();
-        updateDetailedResults(data);
         updateSystemMetrics(data);
+
+        // Update last check time
+        document.getElementById('last-check').textContent =
+            new Date(data.timestamp).toLocaleString();
         
     } catch (error) {
         console.error('Error loading health status:', error);
