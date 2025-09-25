@@ -2079,6 +2079,66 @@ def simple_survey_info():
             'timestamp': datetime.now().isoformat()
         }), 500
 
+@app.route('/test-survey-route')
+def test_survey_route():
+    """Test the actual survey dashboard route without authentication."""
+    try:
+        # Simulate the survey dashboard logic
+        if not os.path.exists(SURVEY_DB_PATH):
+            return jsonify({
+                'status': 'missing_database',
+                'message': f'Survey database not found at {SURVEY_DB_PATH}'
+            })
+
+        if not analytics:
+            return jsonify({
+                'status': 'no_analytics',
+                'message': 'Survey analytics not available'
+            })
+
+        # Try the actual analytics calls that the survey dashboard makes
+        try:
+            overview = analytics.get_survey_overview()
+            survey_breakdown = analytics.get_survey_breakdown()
+            respondent_analysis = analytics.get_respondent_analysis()
+            completion_stats = analytics.get_survey_completion_stats()
+
+            return jsonify({
+                'status': 'success',
+                'message': 'Survey dashboard would load successfully',
+                'data_available': True,
+                'overview_keys': list(overview.keys()) if overview else [],
+                'survey_count': len(survey_breakdown) if survey_breakdown else 0
+            })
+
+        except Exception as analytics_error:
+            error_msg = str(analytics_error).lower()
+            if 'no such table' in error_msg:
+                return jsonify({
+                    'status': 'missing_tables',
+                    'message': 'Survey database tables missing',
+                    'error': str(analytics_error)
+                })
+            elif 'no such column' in error_msg:
+                return jsonify({
+                    'status': 'schema_mismatch_handled',
+                    'message': 'Schema mismatch handled gracefully',
+                    'fallback_data': 'Basic survey info would be shown',
+                    'error': str(analytics_error)
+                })
+            else:
+                return jsonify({
+                    'status': 'other_error',
+                    'message': 'Other analytics error',
+                    'error': str(analytics_error)
+                })
+
+    except Exception as e:
+        return jsonify({
+            'status': 'route_error',
+            'error': str(e)
+        }), 500
+
 @app.template_filter('datetime')
 def datetime_filter(value):
     """Format datetime strings."""
