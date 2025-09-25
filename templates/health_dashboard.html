@@ -146,7 +146,7 @@ async function loadHealthStatus() {
 
 function updateOverallStatus(data) {
     const statusElement = document.getElementById('overall-status');
-    const status = data.overall_status;
+    const status = data && data.overall_status ? data.overall_status : 'unknown';
     
     let statusIcon, statusColor, statusText;
     
@@ -259,10 +259,16 @@ function updateCategoryStatus(elementId, checks) {
 
 function updateDetailedResults(data) {
     const element = document.getElementById('detailed-results');
-    
+
     let html = '<div class="space-y-4">';
-    
-    data.checks.forEach(check => {
+
+    // Safety check for data.checks
+    const checks = data && data.checks ? data.checks : [];
+
+    if (checks.length === 0) {
+        html += '<div class="text-center text-gray-500 py-8">No detailed health check results available</div>';
+    } else {
+        checks.forEach(check => {
         let statusIcon, statusColor;
         
         switch (check.status) {
@@ -297,15 +303,17 @@ function updateDetailedResults(data) {
                 </div>
             </div>
         `;
-    });
-    
+        });
+    }
+
     html += '</div>';
     element.innerHTML = html;
 }
 
 function updateSystemMetrics(data) {
     // Extract system metrics from health check data
-    const systemCheck = data.checks.find(c => c.name === 'System Resources');
+    const checks = data && data.checks ? data.checks : [];
+    const systemCheck = checks.find(c => c.name === 'System Resources');
     
     if (systemCheck && systemCheck.details && systemCheck.details.metrics) {
         const metrics = systemCheck.details.metrics;
