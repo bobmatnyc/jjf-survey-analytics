@@ -83,7 +83,7 @@ DATABASE_URL = os.getenv('DATABASE_URL')
 USE_POSTGRESQL = DATABASE_URL is not None
 
 if USE_POSTGRESQL:
-    print(f"🐘 Using PostgreSQL database: {DATABASE_URL[:50]}...")
+    print(f"🐘 Using PostgreSQL database: {DATABASE_URL[:50] if DATABASE_URL else 'None'}...")
     try:
         import psycopg2
         print("✅ psycopg2 available for PostgreSQL")
