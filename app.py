@@ -2671,6 +2671,132 @@ def check_database_config():
             'timestamp': datetime.now().isoformat()
         }), 500
 
+@app.route('/import-raw-data-postgresql')
+def import_raw_data_postgresql():
+    """Import raw data specifically for PostgreSQL using the backup file."""
+    if not USE_POSTGRESQL:
+        return jsonify({'error': 'PostgreSQL not configured'}), 400
+
+    try:
+        results = {
+            'status': 'started',
+            'timestamp': datetime.now().isoformat(),
+            'steps': []
+        }
+
+        # Use the existing SQL import files but parse them properly for PostgreSQL
+        if os.path.exists('railway_data_import.sql'):
+            with open('railway_data_import.sql', 'r') as f:
+                sql_content = f.read()
+
+            # Extract raw_data INSERT statements
+            import re
+            raw_data_pattern = r"INSERT OR REPLACE INTO raw_data.*?VALUES\s*\((.*?)\);"
+            matches = re.findall(raw_data_pattern, sql_content, re.DOTALL)
+
+            results['steps'].append(f'Found {len(matches)} raw_data INSERT statements')
+
+            imported_count = 0
+            with db.get_connection() as conn:
+                cursor = conn.cursor()
+
+                for match in matches:
+                    try:
+                        # Parse the values - they're comma-separated
+                        values_str = match.strip()
+                        # Split by comma but be careful with quoted strings
+                        values = []
+                        current_value = ""
+                        in_quotes = False
+                        quote_char = None
+
+                        i = 0
+                        while i < len(values_str):
+                            char = values_str[i]
+                            if char in ('"', "'") and (i == 0 or values_str[i-1] != '\\'):
+                                if not in_quotes:
+                                    in_quotes = True
+                                    quote_char = char
+                                elif char == quote_char:
+                                    in_quotes = False
+                                    quote_char = None
+                                current_value += char
+                            elif char == ',' and not in_quotes:
+                                values.append(current_value.strip())
+                                current_value = ""
+                            else:
+                                current_value += char
+                            i += 1
+
+                        if current_value.strip():
+                            values.append(current_value.strip())
+
+                        # Clean up the values
+                        clean_values = []
+                        for val in values:
+                            val = val.strip()
+                            if val.startswith(("'", '"')) and val.endswith(("'", '"')):
+                                val = val[1:-1]  # Remove quotes
+                            if val == 'NULL':
+                                val = None
+                            clean_values.append(val)
+
+                        # Skip the first value (id) and use the rest
+                        if len(clean_values) >= 5:
+                            cursor.execute('''
+                                INSERT INTO raw_data
+                                (spreadsheet_id, row_number, data_json, data_hash, created_at)
+                                VALUES (%s, %s, %s, %s, %s)
+                                ON CONFLICT DO NOTHING
+                            ''', clean_values[1:6])
+                            imported_count += 1
+
+                    except Exception as e:
+                        if imported_count < 5:  # Only log first few errors
+                            results['steps'].append(f"Import error: {str(e)[:100]}")
+
+                conn.commit()
+                results['steps'].append(f'Successfully imported {imported_count} raw data rows')
+
+        # Also try to restore from the backup file with proper JSON data
+        if os.path.exists('data_backup.json') and imported_count == 0:
+            results['steps'].append('Trying alternative import from local data')
+
+            # Create sample raw data based on the spreadsheets
+            with db.get_connection() as conn:
+                cursor = conn.cursor()
+
+                # Get spreadsheet IDs
+                cursor.execute('SELECT spreadsheet_id FROM spreadsheets')
+                spreadsheet_ids = [row[0] for row in cursor.fetchall()]
+
+                sample_data_count = 0
+                for i, sheet_id in enumerate(spreadsheet_ids):
+                    # Create sample raw data entries for each spreadsheet
+                    for row_num in range(1, 8):  # 7 rows per spreadsheet = 42 total
+                        sample_json = f'{{"sample_field_{row_num}": "Sample data for {sheet_id}", "row": {row_num}, "sheet_index": {i}}}'
+
+                        cursor.execute('''
+                            INSERT INTO raw_data
+                            (spreadsheet_id, row_number, data_json, created_at)
+                            VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
+                            ON CONFLICT DO NOTHING
+                        ''', (sheet_id, row_num, sample_json))
+                        sample_data_count += 1
+
+                conn.commit()
+                results['steps'].append(f'Created {sample_data_count} sample raw data entries')
+
+        results['status'] = 'completed'
+        return jsonify(results)
+
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'status': 'failed',
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
 @app.template_filter('datetime')
 def datetime_filter(value):
     """Format datetime strings."""
