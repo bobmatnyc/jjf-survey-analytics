@@ -1806,13 +1806,88 @@ def fix_data_schema():
 def init_survey_database():
     """Initialize the survey normalized database."""
     try:
-        import sqlite3
-
         results = {
             'status': 'started',
             'timestamp': datetime.now().isoformat(),
             'steps': []
         }
+
+        # Use PostgreSQL if available, otherwise SQLite
+        if USE_POSTGRESQL:
+            results['steps'].append('Using PostgreSQL for survey database')
+
+            # Survey tables should already exist from PostgreSQL initialization
+            with db.get_connection() as conn:
+                cursor = conn.cursor()
+
+                # Check if survey tables exist
+                cursor.execute("""
+                    SELECT COUNT(*) FROM information_schema.tables
+                    WHERE table_schema = 'public' AND table_name IN ('surveys', 'survey_questions')
+                """)
+                table_count = cursor.fetchone()[0]
+
+                if table_count < 2:
+                    # Initialize PostgreSQL survey tables if they don't exist
+                    db.init_postgresql_tables()
+                    results['steps'].append('Created missing PostgreSQL survey tables')
+
+                # Add sample survey data
+                cursor.execute('''
+                    INSERT INTO surveys (title, description, status)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT DO NOTHING
+                    RETURNING id
+                ''', ('JJF Survey Collection', 'Combined survey and assessment questions', 'active'))
+
+                survey_result = cursor.fetchone()
+                if survey_result:
+                    survey_id = survey_result[0]
+                    results['steps'].append(f'Created survey with ID: {survey_id}')
+                else:
+                    # Get existing survey ID
+                    cursor.execute('SELECT id FROM surveys LIMIT 1')
+                    survey_result = cursor.fetchone()
+                    survey_id = survey_result[0] if survey_result else 1
+                    results['steps'].append(f'Using existing survey ID: {survey_id}')
+
+                # Add sample questions
+                sample_questions = [
+                    ('tech_maturity', 'How would you rate your organization\'s overall technology maturity?'),
+                    ('biggest_challenges', 'What are your organization\'s biggest technology challenges?'),
+                    ('future_priorities', 'What are your top technology priorities for the next year?'),
+                    ('satisfaction', 'How satisfied are you with current technology solutions?'),
+                    ('training_needs', 'What technology training would be most valuable for your team?')
+                ]
+
+                question_count = 0
+                for i, (key, text) in enumerate(sample_questions):
+                    cursor.execute('''
+                        INSERT INTO survey_questions
+                        (survey_id, question_key, question_text, question_order)
+                        VALUES (%s, %s, %s, %s)
+                        ON CONFLICT DO NOTHING
+                    ''', (survey_id, key, text, i + 1))
+                    question_count += 1
+
+                conn.commit()
+                results['steps'].append(f'Added {question_count} sample questions')
+
+                # Get final counts
+                cursor.execute('SELECT COUNT(*) FROM surveys')
+                survey_count = cursor.fetchone()[0]
+                cursor.execute('SELECT COUNT(*) FROM survey_questions')
+                question_count = cursor.fetchone()[0]
+
+                results['summary'] = {
+                    'database_type': 'PostgreSQL',
+                    'total_surveys': survey_count,
+                    'total_questions': question_count
+                }
+
+        else:
+            results['steps'].append('Using SQLite for survey database')
+            import sqlite3
 
         # Check if survey database exists
         survey_db_exists = os.path.exists(SURVEY_DB_PATH)
@@ -1995,7 +2070,20 @@ def comprehensive_status_check():
 
         # Check survey database
         try:
-            if os.path.exists(SURVEY_DB_PATH):
+            # Use PostgreSQL if available, otherwise SQLite
+            if USE_POSTGRESQL:
+                with db.get_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT COUNT(*) FROM survey_questions")
+                    result = cursor.fetchone()
+                    question_count = result[0] if result else 0
+
+                    cursor.execute("""
+                        SELECT table_name FROM information_schema.tables
+                        WHERE table_schema = 'public' AND table_name LIKE 'survey%'
+                    """)
+                    tables = [row[0] if db.use_postgresql else row[0] for row in cursor.fetchall()]
+            elif os.path.exists(SURVEY_DB_PATH):
                 import sqlite3
                 with sqlite3.connect(SURVEY_DB_PATH) as conn:
                     cursor = conn.cursor()
@@ -2004,6 +2092,9 @@ def comprehensive_status_check():
 
                     cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
                     tables = [row[0] for row in cursor.fetchall()]
+            else:
+                question_count = 0
+                tables = []
 
                     status['components']['survey_database'] = {
                         'status': 'healthy',
