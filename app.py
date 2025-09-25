@@ -1899,6 +1899,55 @@ def comprehensive_status_check():
             'timestamp': datetime.now().isoformat()
         }), 500
 
+@app.route('/check-survey-schema')
+def check_survey_schema():
+    """Check the actual schema of survey database tables."""
+    try:
+        if not os.path.exists(SURVEY_DB_PATH):
+            return jsonify({'error': 'Survey database not found'}), 404
+
+        import sqlite3
+        schema_info = {}
+
+        with sqlite3.connect(SURVEY_DB_PATH) as conn:
+            cursor = conn.cursor()
+
+            # Get all tables
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+            tables = [row[0] for row in cursor.fetchall()]
+
+            # Get schema for each table
+            for table in tables:
+                cursor.execute(f"PRAGMA table_info({table})")
+                columns = cursor.fetchall()
+                schema_info[table] = {
+                    'columns': [{'name': col[1], 'type': col[2], 'notnull': col[3], 'pk': col[5]} for col in columns],
+                    'column_names': [col[1] for col in columns]
+                }
+
+                # Get sample data
+                cursor.execute(f"SELECT COUNT(*) FROM {table}")
+                row_count = cursor.fetchone()[0]
+                schema_info[table]['row_count'] = row_count
+
+                if row_count > 0:
+                    cursor.execute(f"SELECT * FROM {table} LIMIT 1")
+                    sample_row = cursor.fetchone()
+                    if sample_row:
+                        schema_info[table]['sample_data'] = dict(zip(schema_info[table]['column_names'], sample_row))
+
+        return jsonify({
+            'status': 'success',
+            'schema': schema_info,
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
 @app.route('/test-survey-dashboard')
 def test_survey_dashboard():
     """Test survey dashboard functionality without authentication."""
