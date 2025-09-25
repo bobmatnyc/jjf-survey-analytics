@@ -773,10 +773,21 @@ def survey_dashboard():
 
         # Try to get analytics data with error handling
         try:
+            print("🔍 Getting survey overview...")
             overview = analytics.get_survey_overview()
+            print("✅ Survey overview successful")
+
+            print("🔍 Getting survey breakdown...")
             survey_breakdown = analytics.get_survey_breakdown()
+            print("✅ Survey breakdown successful")
+
+            print("🔍 Getting respondent analysis...")
             respondent_analysis = analytics.get_respondent_analysis()
+            print("✅ Respondent analysis successful")
+
+            print("🔍 Getting completion stats...")
             completion_stats = analytics.get_survey_completion_stats()
+            print("✅ Completion stats successful")
         except Exception as analytics_error:
             if 'no such table' in str(analytics_error).lower():
                 return render_template('error.html',
@@ -3245,6 +3256,60 @@ def debug_survey_schema():
     except Exception as e:
         return jsonify({
             'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+@app.route('/fix-survey-schema')
+def fix_survey_schema():
+    """Fix survey database schema to ensure response_date column exists."""
+    try:
+        import sqlite3
+        results = {
+            'status': 'started',
+            'timestamp': datetime.now().isoformat(),
+            'steps': []
+        }
+
+        with sqlite3.connect(SURVEY_DB_PATH) as conn:
+            cursor = conn.cursor()
+
+            # Check if response_date column exists
+            cursor.execute("PRAGMA table_info(survey_responses)")
+            columns = [row[1] for row in cursor.fetchall()]
+            results['steps'].append(f'Current columns in survey_responses: {columns}')
+
+            if 'response_date' not in columns:
+                # Add response_date column if it doesn't exist
+                cursor.execute('''
+                    ALTER TABLE survey_responses
+                    ADD COLUMN response_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                ''')
+                results['steps'].append('Added response_date column to survey_responses')
+
+                # Update existing records to use created_at as response_date
+                cursor.execute('''
+                    UPDATE survey_responses
+                    SET response_date = created_at
+                    WHERE response_date IS NULL
+                ''')
+                results['steps'].append('Updated existing records with response_date values')
+            else:
+                results['steps'].append('response_date column already exists')
+
+            # Verify the fix
+            cursor.execute("PRAGMA table_info(survey_responses)")
+            updated_columns = [row[1] for row in cursor.fetchall()]
+            results['steps'].append(f'Updated columns: {updated_columns}')
+
+            conn.commit()
+
+        results['status'] = 'completed'
+        return jsonify(results)
+
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'status': 'failed',
             'timestamp': datetime.now().isoformat()
         }), 500
 
