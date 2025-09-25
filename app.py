@@ -2797,6 +2797,84 @@ def import_raw_data_postgresql():
             'timestamp': datetime.now().isoformat()
         }), 500
 
+@app.route('/init-postgresql-surveys')
+def init_postgresql_surveys():
+    """Initialize survey data in PostgreSQL."""
+    if not USE_POSTGRESQL:
+        return jsonify({'error': 'PostgreSQL not configured'}), 400
+
+    try:
+        results = {
+            'status': 'started',
+            'timestamp': datetime.now().isoformat(),
+            'steps': []
+        }
+
+        # Import survey questions from the SQL file
+        if os.path.exists('railway_survey_import.sql'):
+            with open('railway_survey_import.sql', 'r') as f:
+                sql_content = f.read()
+
+            with db.get_connection() as conn:
+                cursor = conn.cursor()
+
+                # Create a default survey
+                cursor.execute('''
+                    INSERT INTO surveys (title, description, status)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT DO NOTHING
+                    RETURNING id
+                ''', ('JJF Survey Collection', 'Combined survey and assessment questions', 'active'))
+
+                survey_result = cursor.fetchone()
+                if survey_result:
+                    survey_id = survey_result[0]
+                else:
+                    # Get existing survey ID
+                    cursor.execute('SELECT id FROM surveys LIMIT 1')
+                    survey_result = cursor.fetchone()
+                    survey_id = survey_result[0] if survey_result else 1
+
+                results['steps'].append(f'Using survey ID: {survey_id}')
+
+                # Parse and import survey questions
+                import re
+                question_pattern = r"INSERT OR REPLACE INTO survey_questions.*?VALUES\s*\((.*?)\);"
+                matches = re.findall(question_pattern, sql_content, re.DOTALL)
+
+                imported_questions = 0
+                for match in matches:
+                    try:
+                        # Simple parsing for question data
+                        values = [v.strip().strip("'\"") for v in match.split(',')]
+                        if len(values) >= 4:
+                            question_key = values[2] if len(values) > 2 else f'q_{imported_questions}'
+                            question_text = values[3] if len(values) > 3 else 'Sample question'
+
+                            cursor.execute('''
+                                INSERT INTO survey_questions
+                                (survey_id, question_key, question_text, question_order)
+                                VALUES (%s, %s, %s, %s)
+                                ON CONFLICT DO NOTHING
+                            ''', (survey_id, question_key, question_text, imported_questions + 1))
+                            imported_questions += 1
+                    except Exception as e:
+                        if imported_questions < 5:
+                            results['steps'].append(f"Question import warning: {str(e)[:100]}")
+
+                conn.commit()
+                results['steps'].append(f'Imported {imported_questions} survey questions')
+
+        results['status'] = 'completed'
+        return jsonify(results)
+
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'status': 'failed',
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
 @app.template_filter('datetime')
 def datetime_filter(value):
     """Format datetime strings."""
