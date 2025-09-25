@@ -50,12 +50,23 @@ class SurveyAnalytics:
             total_possible_answers = total_responses * total_questions if total_questions > 0 else 0
             response_rate = (answered_questions / total_possible_answers * 100) if total_possible_answers > 0 else 0
             
-            # Recent activity
-            cursor.execute('''
-                SELECT COUNT(*) as count 
-                FROM survey_responses 
-                WHERE response_date >= datetime('now', '-7 days')
-            ''')
+            # Recent activity - use created_at if response_date doesn't exist
+            try:
+                cursor.execute('''
+                    SELECT COUNT(*) as count
+                    FROM survey_responses
+                    WHERE response_date >= datetime('now', '-7 days')
+                ''')
+            except Exception as e:
+                if 'no such column' in str(e).lower():
+                    # Fallback to created_at column
+                    cursor.execute('''
+                        SELECT COUNT(*) as count
+                        FROM survey_responses
+                        WHERE created_at >= datetime('now', '-7 days')
+                    ''')
+                else:
+                    raise
             recent_responses = cursor.fetchone()['count']
             
             return {
@@ -82,8 +93,8 @@ class SurveyAnalytics:
                     COUNT(DISTINCT sr.respondent_id) as unique_respondents,
                     COUNT(DISTINCT sq.id) as question_count,
                     AVG(CASE WHEN sa.is_empty = 0 THEN 1.0 ELSE 0.0 END) as completion_rate,
-                    MIN(sr.response_date) as first_response,
-                    MAX(sr.response_date) as last_response
+                    MIN(COALESCE(sr.response_date, sr.created_at)) as first_response,
+                    MAX(COALESCE(sr.response_date, sr.created_at)) as last_response
                 FROM surveys s
                 LEFT JOIN survey_responses sr ON s.id = sr.survey_id
                 LEFT JOIN survey_questions sq ON s.id = sq.survey_id
@@ -100,16 +111,16 @@ class SurveyAnalytics:
             cursor = conn.cursor()
             
             cursor.execute('''
-                SELECT 
-                    DATE(sr.response_date) as response_date,
+                SELECT
+                    DATE(COALESCE(sr.response_date, sr.created_at)) as response_date,
                     COUNT(*) as response_count,
                     COUNT(DISTINCT sr.respondent_id) as unique_respondents,
                     s.survey_type,
                     s.survey_name
                 FROM survey_responses sr
                 JOIN surveys s ON sr.survey_id = s.id
-                WHERE sr.response_date >= datetime('now', '-{} days')
-                GROUP BY DATE(sr.response_date), s.survey_type, s.survey_name
+                WHERE COALESCE(sr.response_date, sr.created_at) >= datetime('now', '-{} days')
+                GROUP BY DATE(COALESCE(sr.response_date, sr.created_at)), s.survey_type, s.survey_name
                 ORDER BY response_date DESC
             '''.format(days))
             
@@ -256,13 +267,13 @@ class SurveyAnalytics:
             
             # Daily response counts
             cursor.execute('''
-                SELECT 
-                    DATE(response_date) as date,
+                SELECT
+                    DATE(COALESCE(response_date, created_at)) as date,
                     COUNT(*) as responses,
                     COUNT(DISTINCT respondent_id) as unique_respondents
                 FROM survey_responses
-                WHERE response_date >= datetime('now', '-{} days')
-                GROUP BY DATE(response_date)
+                WHERE COALESCE(response_date, created_at) >= datetime('now', '-{} days')
+                GROUP BY DATE(COALESCE(response_date, created_at))
                 ORDER BY date
             '''.format(days))
             
@@ -270,14 +281,14 @@ class SurveyAnalytics:
             
             # Survey type breakdown over time
             cursor.execute('''
-                SELECT 
-                    DATE(sr.response_date) as date,
+                SELECT
+                    DATE(COALESCE(sr.response_date, sr.created_at)) as date,
                     s.survey_type,
                     COUNT(*) as responses
                 FROM survey_responses sr
                 JOIN surveys s ON sr.survey_id = s.id
-                WHERE sr.response_date >= datetime('now', '-{} days')
-                GROUP BY DATE(sr.response_date), s.survey_type
+                WHERE COALESCE(sr.response_date, sr.created_at) >= datetime('now', '-{} days')
+                GROUP BY DATE(COALESCE(sr.response_date, sr.created_at)), s.survey_type
                 ORDER BY date, s.survey_type
             '''.format(days))
             
@@ -308,7 +319,7 @@ class SurveyAnalytics:
                     sq.question_key,
                     sq.question_text,
                     sa.answer_text,
-                    sr.response_date,
+                    COALESCE(sr.response_date, sr.created_at) as response_date,
                     r.browser,
                     r.device
                 FROM survey_answers sa
@@ -317,7 +328,7 @@ class SurveyAnalytics:
                 JOIN surveys s ON sr.survey_id = s.id
                 JOIN respondents r ON sr.respondent_id = r.id
                 WHERE {where_clause}
-                ORDER BY sr.response_date DESC
+                ORDER BY COALESCE(sr.response_date, sr.created_at) DESC
                 LIMIT 100
             ''', params)
             
@@ -336,7 +347,7 @@ class SurveyAnalytics:
             cursor.execute('''
                 SELECT 
                     sr.id as response_id,
-                    sr.response_date,
+                    COALESCE(sr.response_date, sr.created_at) as response_date,
                     r.browser,
                     r.device,
                     r.respondent_hash,
@@ -351,7 +362,7 @@ class SurveyAnalytics:
                 JOIN survey_answers sa ON sr.id = sa.response_id
                 JOIN survey_questions sq ON sa.question_id = sq.id
                 WHERE sr.survey_id = ?
-                ORDER BY sr.response_date, sq.question_order
+                ORDER BY COALESCE(sr.response_date, sr.created_at), sq.question_order
             ''', (survey_id,))
             
             responses = [dict(row) for row in cursor.fetchall()]
