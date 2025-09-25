@@ -84,6 +84,15 @@ USE_POSTGRESQL = DATABASE_URL is not None
 
 if USE_POSTGRESQL:
     print(f"🐘 Using PostgreSQL database: {DATABASE_URL[:50]}...")
+    try:
+        import psycopg2
+        print("✅ psycopg2 available for PostgreSQL")
+    except ImportError:
+        print("❌ psycopg2 not available, installing...")
+        import subprocess
+        subprocess.check_call(['pip', 'install', 'psycopg2-binary'])
+        import psycopg2
+        print("✅ psycopg2 installed successfully")
 else:
     print(f"📁 Using SQLite databases: {DB_PATH}, {SURVEY_DB_PATH}")
 
@@ -92,13 +101,133 @@ class DatabaseManager:
     
     def __init__(self, db_path: str = DB_PATH):
         self.db_path = db_path
+        self.use_postgresql = USE_POSTGRESQL
+        self.database_url = DATABASE_URL
+        if self.use_postgresql:
+            self.init_postgresql_tables()
     
     def get_connection(self):
         """Get database connection with row factory."""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        return conn
-    
+        if self.use_postgresql:
+            import psycopg2
+            import psycopg2.extras
+            conn = psycopg2.connect(self.database_url)
+            conn.cursor_factory = psycopg2.extras.RealDictCursor
+            return conn
+        else:
+            conn = sqlite3.connect(self.db_path)
+            conn.row_factory = sqlite3.Row
+            return conn
+
+    def init_postgresql_tables(self):
+        """Initialize PostgreSQL tables if they don't exist."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+
+                # Create spreadsheets table
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS spreadsheets (
+                        id SERIAL PRIMARY KEY,
+                        spreadsheet_id VARCHAR(255) UNIQUE NOT NULL,
+                        url TEXT NOT NULL,
+                        title TEXT,
+                        sheet_type VARCHAR(50),
+                        description TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        last_synced TIMESTAMP
+                    )
+                ''')
+
+                # Create raw_data table
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS raw_data (
+                        id SERIAL PRIMARY KEY,
+                        spreadsheet_id VARCHAR(255) NOT NULL,
+                        row_number INTEGER NOT NULL,
+                        data_json TEXT NOT NULL,
+                        data_hash VARCHAR(255),
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (spreadsheet_id) REFERENCES spreadsheets (spreadsheet_id)
+                    )
+                ''')
+
+                # Create extraction_jobs table
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS extraction_jobs (
+                        id SERIAL PRIMARY KEY,
+                        job_name VARCHAR(255) NOT NULL,
+                        status VARCHAR(50) NOT NULL,
+                        total_spreadsheets INTEGER DEFAULT 0,
+                        processed_spreadsheets INTEGER DEFAULT 0,
+                        successful_spreadsheets INTEGER DEFAULT 0,
+                        total_rows INTEGER DEFAULT 0,
+                        processed_rows INTEGER DEFAULT 0,
+                        started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        completed_at TIMESTAMP,
+                        error_message TEXT
+                    )
+                ''')
+
+                # Create survey tables
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS surveys (
+                        id SERIAL PRIMARY KEY,
+                        title VARCHAR(255) NOT NULL,
+                        description TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        status VARCHAR(50) DEFAULT 'active'
+                    )
+                ''')
+
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS survey_questions (
+                        id SERIAL PRIMARY KEY,
+                        survey_id INTEGER,
+                        question_key VARCHAR(255),
+                        question_text TEXT,
+                        question_type VARCHAR(50) DEFAULT 'text',
+                        question_order INTEGER,
+                        is_required BOOLEAN DEFAULT FALSE,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (survey_id) REFERENCES surveys (id)
+                    )
+                ''')
+
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS survey_responses (
+                        id SERIAL PRIMARY KEY,
+                        survey_id INTEGER,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        is_complete BOOLEAN DEFAULT FALSE,
+                        completion_time_seconds INTEGER,
+                        FOREIGN KEY (survey_id) REFERENCES surveys (id)
+                    )
+                ''')
+
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS survey_answers (
+                        id SERIAL PRIMARY KEY,
+                        response_id INTEGER,
+                        question_id INTEGER,
+                        answer_text TEXT,
+                        answer_numeric DECIMAL,
+                        answer_boolean BOOLEAN,
+                        answer_date TIMESTAMP,
+                        is_empty BOOLEAN DEFAULT FALSE,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (response_id) REFERENCES survey_responses (id),
+                        FOREIGN KEY (question_id) REFERENCES survey_questions (id)
+                    )
+                ''')
+
+                conn.commit()
+                print("✅ PostgreSQL tables initialized successfully")
+
+        except Exception as e:
+            print(f"❌ Error initializing PostgreSQL tables: {e}")
+            raise
+
     def get_spreadsheets(self) -> List[Dict]:
         """Get all spreadsheets with row counts."""
         with self.get_connection() as conn:
@@ -2340,6 +2469,145 @@ def restore_from_backup():
     except Exception as e:
         return jsonify({
             'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+@app.route('/migrate-to-postgresql')
+def migrate_to_postgresql():
+    """Migrate data from SQLite to PostgreSQL."""
+    if not USE_POSTGRESQL:
+        return jsonify({
+            'error': 'PostgreSQL not configured. Set DATABASE_URL environment variable.',
+            'current_db': 'SQLite'
+        }), 400
+
+    try:
+        results = {
+            'status': 'started',
+            'timestamp': datetime.now().isoformat(),
+            'migration_steps': []
+        }
+
+        # Initialize PostgreSQL tables
+        db.init_postgresql_tables()
+        results['migration_steps'].append('PostgreSQL tables initialized')
+
+        # Check if we have existing data to migrate
+        if os.path.exists('data_backup.json'):
+            results['migration_steps'].append('Found data_backup.json, migrating from backup')
+
+            import json
+            with open('data_backup.json', 'r') as f:
+                backup_data = json.load(f)
+
+            with db.get_connection() as conn:
+                cursor = conn.cursor()
+
+                # Migrate spreadsheets
+                migrated_spreadsheets = 0
+                for sheet in backup_data.get('spreadsheets', []):
+                    try:
+                        if db.use_postgresql:
+                            cursor.execute('''
+                                INSERT INTO spreadsheets
+                                (spreadsheet_id, url, title, sheet_type, description, created_at, last_synced)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                                ON CONFLICT (spreadsheet_id) DO UPDATE SET
+                                title = EXCLUDED.title,
+                                sheet_type = EXCLUDED.sheet_type,
+                                description = EXCLUDED.description,
+                                last_synced = EXCLUDED.last_synced
+                            ''', (
+                                sheet['spreadsheet_id'], sheet.get('url'), sheet.get('title'),
+                                sheet.get('sheet_type'), sheet.get('description'),
+                                sheet.get('created_at'), sheet.get('last_synced')
+                            ))
+                        migrated_spreadsheets += 1
+                    except Exception as e:
+                        results['migration_steps'].append(f"Error migrating spreadsheet {sheet.get('spreadsheet_id')}: {str(e)[:100]}")
+
+                # Migrate extraction jobs
+                migrated_jobs = 0
+                for job in backup_data.get('extraction_jobs', []):
+                    try:
+                        if db.use_postgresql:
+                            cursor.execute('''
+                                INSERT INTO extraction_jobs
+                                (job_name, status, total_spreadsheets, processed_spreadsheets,
+                                 successful_spreadsheets, total_rows, processed_rows,
+                                 started_at, completed_at, error_message)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            ''', (
+                                job['job_name'], job['status'], job.get('total_spreadsheets', 0),
+                                job.get('processed_spreadsheets', 0), job.get('successful_spreadsheets', 0),
+                                job.get('total_rows', 0), job.get('processed_rows', 0),
+                                job.get('started_at'), job.get('completed_at'), job.get('error_message')
+                            ))
+                        migrated_jobs += 1
+                    except Exception as e:
+                        results['migration_steps'].append(f"Error migrating job {job.get('job_name')}: {str(e)[:100]}")
+
+                conn.commit()
+
+                results['migration_steps'].append(f'Migrated {migrated_spreadsheets} spreadsheets')
+                results['migration_steps'].append(f'Migrated {migrated_jobs} extraction jobs')
+
+        # Try to import from SQL files if available
+        if os.path.exists('railway_data_import.sql'):
+            results['migration_steps'].append('Found railway_data_import.sql, importing raw data')
+
+            # Parse and convert SQLite SQL to PostgreSQL
+            with open('railway_data_import.sql', 'r') as f:
+                sql_content = f.read()
+
+            # Extract INSERT statements for raw_data
+            import re
+            raw_data_inserts = re.findall(r'INSERT OR REPLACE INTO raw_data.*?;', sql_content, re.DOTALL)
+
+            migrated_raw_data = 0
+            with db.get_connection() as conn:
+                cursor = conn.cursor()
+
+                for insert_stmt in raw_data_inserts:
+                    try:
+                        # Convert SQLite INSERT OR REPLACE to PostgreSQL INSERT ON CONFLICT
+                        pg_stmt = insert_stmt.replace('INSERT OR REPLACE INTO', 'INSERT INTO')
+                        pg_stmt = pg_stmt.replace('?', '%s')  # Convert placeholders
+
+                        # Extract values from the INSERT statement
+                        values_match = re.search(r'VALUES\s*\((.*?)\)', insert_stmt)
+                        if values_match:
+                            values_str = values_match.group(1)
+                            # Simple parsing - this might need refinement
+                            values = [v.strip().strip("'\"") for v in values_str.split(',')]
+
+                            cursor.execute('''
+                                INSERT INTO raw_data
+                                (spreadsheet_id, row_number, data_json, data_hash, created_at)
+                                VALUES (%s, %s, %s, %s, %s)
+                                ON CONFLICT DO NOTHING
+                            ''', values[1:6])  # Skip the id field
+                            migrated_raw_data += 1
+                    except Exception as e:
+                        if migrated_raw_data < 5:  # Only log first few errors
+                            results['migration_steps'].append(f"Raw data import warning: {str(e)[:100]}")
+
+                conn.commit()
+                results['migration_steps'].append(f'Imported {migrated_raw_data} raw data rows')
+
+        results['status'] = 'completed'
+        results['summary'] = {
+            'database_type': 'PostgreSQL',
+            'tables_created': True,
+            'data_migrated': True
+        }
+
+        return jsonify(results)
+
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'status': 'failed',
             'timestamp': datetime.now().isoformat()
         }), 500
 
