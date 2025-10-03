@@ -516,6 +516,30 @@ class DatabaseManager:
                                 elif ('organization' in key_lower or 'company' in key_lower or 'org' in key_lower) and len(value_str) < 100:
                                     organization = value_str
 
+                        # Skip rows with no user data AND no meaningful response data
+                        # (e.g., anonymous entries with only timestamps)
+                        has_user_data = user_name or user_email or organization
+
+                        # Count meaningful response fields (exclude timestamps, IDs, etc.)
+                        meaningful_fields = []
+                        for key, value in data.items():
+                            if value and str(value).strip():
+                                key_lower = key.lower()
+                                value_str = str(value).strip()
+
+                                # Skip metadata fields
+                                if any(x in key_lower for x in ['timestamp', 'id', 'created', 'updated', 'date']):
+                                    continue
+                                # Skip if it's just a question
+                                if '?' in value_str and len(value_str) > 50:
+                                    continue
+
+                                meaningful_fields.append(value_str)
+
+                        # If no user data and no meaningful responses, skip this row
+                        if not has_user_data and len(meaningful_fields) == 0:
+                            continue
+
                         # Create a detailed preview of the data changes
                         preview_items = []
                         key_value_pairs = []
