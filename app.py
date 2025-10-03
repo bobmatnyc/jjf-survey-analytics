@@ -40,7 +40,8 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'surveyor-data-viewer-2025-de
 
 # Authentication configuration
 APP_PASSWORD = os.getenv('APP_PASSWORD', 'survey2025!')  # Default password, change in production
-REQUIRE_AUTH = os.getenv('REQUIRE_AUTH', 'true').lower() == 'true'
+# Disable auth for local development, enable for production
+REQUIRE_AUTH = os.getenv('REQUIRE_AUTH', 'false').lower() == 'true'
 
 # Port configuration - Railway assigns this dynamically
 PORT = int(os.getenv('PORT', 8080))  # Railway compatible default
@@ -330,8 +331,8 @@ class DatabaseManager:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT * FROM extraction_jobs 
-                ORDER BY started_at DESC
+                SELECT * FROM extraction_jobs
+                ORDER BY id DESC
             ''')
             return [dict(row) for row in cursor.fetchall()]
     
@@ -370,10 +371,10 @@ class DatabaseManager:
                     logger.warning(f"Could not get job count: {e}")
 
                 try:
-                    # Latest job
+                    # Latest job (order by ID to get most recent)
                     cursor.execute('''
                         SELECT * FROM extraction_jobs
-                        ORDER BY started_at DESC
+                        ORDER BY id DESC
                         LIMIT 1
                     ''')
                     latest_job_row = cursor.fetchone()
@@ -437,12 +438,12 @@ class DatabaseManager:
             }
 
     def get_latest_updates(self, limit=20):
-        """Get the latest data updates/changes in descending order of recency."""
+        """Get the latest data updates/changes with user and organization context."""
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
 
-                # Get latest raw data entries with spreadsheet info
+                # Get latest raw data entries with spreadsheet info and user context
                 if self.use_postgresql:
                     cursor.execute('''
                         SELECT
@@ -452,6 +453,7 @@ class DatabaseManager:
                             s.title as spreadsheet_title,
                             s.sheet_type,
                             s.spreadsheet_id,
+                            s.url as spreadsheet_url,
                             rd.data_json
                         FROM raw_data rd
                         JOIN spreadsheets s ON rd.spreadsheet_id = s.spreadsheet_id
@@ -467,6 +469,7 @@ class DatabaseManager:
                             s.title as spreadsheet_title,
                             s.sheet_type,
                             s.spreadsheet_id,
+                            s.url as spreadsheet_url,
                             rd.data_json
                         FROM raw_data rd
                         JOIN spreadsheets s ON rd.spreadsheet_id = s.spreadsheet_id
@@ -480,6 +483,38 @@ class DatabaseManager:
                         # Parse the data_json to get a preview
                         import json
                         data = json.loads(row['data_json']) if row['data_json'] else {}
+
+                        # Skip empty rows (where all values are empty or just whitespace)
+                        non_empty_values = [v for v in data.values() if v and str(v).strip()]
+                        if len(non_empty_values) == 0:
+                            continue
+
+                        # Skip rows that are just question definitions (all values are questions)
+                        question_count = sum(1 for v in data.values() if v and '?' in str(v))
+                        if question_count > len(non_empty_values) * 0.8:  # If 80%+ are questions, skip
+                            continue
+
+                        # Extract user and organization information
+                        user_name = None
+                        user_email = None
+                        organization = None
+
+                        # Look for common user/org fields
+                        for key, value in data.items():
+                            if value and str(value).strip():
+                                key_lower = key.lower()
+                                value_str = str(value).strip()
+
+                                # Extract email
+                                if 'email' in key_lower and '@' in value_str:
+                                    user_email = value_str
+                                # Extract name
+                                elif ('name' in key_lower or 'respondent' in key_lower) and len(value_str) < 100 and not '?' in value_str:
+                                    if not user_name or len(value_str) > len(user_name):
+                                        user_name = value_str
+                                # Extract organization
+                                elif ('organization' in key_lower or 'company' in key_lower or 'org' in key_lower) and len(value_str) < 100:
+                                    organization = value_str
 
                         # Create a detailed preview of the data changes
                         preview_items = []
@@ -540,6 +575,12 @@ class DatabaseManager:
                         combined_items = answer_items + question_items
                         preview = " • ".join(combined_items[:4]) if combined_items else "No data available"
 
+                        # Get spreadsheet URL - handle both dict and sqlite3.Row
+                        try:
+                            spreadsheet_url = row['spreadsheet_url'] if 'spreadsheet_url' in row.keys() else f"https://docs.google.com/spreadsheets/d/{row['spreadsheet_id']}/edit"
+                        except:
+                            spreadsheet_url = f"https://docs.google.com/spreadsheets/d/{row['spreadsheet_id']}/edit"
+
                         updates.append({
                             'id': row['id'],
                             'spreadsheet_title': row['spreadsheet_title'],
@@ -550,8 +591,11 @@ class DatabaseManager:
                             'preview': preview,
                             'data_count': len([v for v in data.values() if v and str(v).strip()]),
                             'key_value_pairs': key_value_pairs[:8],  # Limit to first 8 fields for performance
-                            'spreadsheet_url': f"https://docs.google.com/spreadsheets/d/{row['spreadsheet_id']}/edit",
-                            'has_more_data': len(key_value_pairs) > 8
+                            'spreadsheet_url': spreadsheet_url,
+                            'has_more_data': len(key_value_pairs) > 8,
+                            'user_name': user_name,
+                            'user_email': user_email,
+                            'organization': organization
                         })
                     except Exception as e:
                         logger.warning(f"Error processing update row {row['id']}: {e}")
@@ -572,6 +616,142 @@ class DatabaseManager:
 
         except Exception as e:
             logger.error(f"❌ Error getting latest updates: {e}")
+            return []
+
+    def get_updates_summary(self, limit=50):
+        """Get a summary of latest updates grouped by spreadsheet with organization counts."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+
+                # Get latest raw data entries
+                if self.use_postgresql:
+                    cursor.execute('''
+                        SELECT
+                            rd.id,
+                            rd.row_number,
+                            rd.created_at,
+                            s.title as spreadsheet_title,
+                            s.sheet_type,
+                            s.spreadsheet_id,
+                            s.url as spreadsheet_url,
+                            rd.data_json
+                        FROM raw_data rd
+                        JOIN spreadsheets s ON rd.spreadsheet_id = s.spreadsheet_id
+                        ORDER BY rd.created_at DESC
+                        LIMIT %s
+                    ''', (limit,))
+                else:
+                    cursor.execute('''
+                        SELECT
+                            rd.id,
+                            rd.row_number,
+                            rd.created_at,
+                            s.title as spreadsheet_title,
+                            s.sheet_type,
+                            s.spreadsheet_id,
+                            s.url as spreadsheet_url,
+                            rd.data_json
+                        FROM raw_data rd
+                        JOIN spreadsheets s ON rd.spreadsheet_id = s.spreadsheet_id
+                        ORDER BY rd.created_at DESC
+                        LIMIT ?
+                    ''', (limit,))
+
+                # Group by spreadsheet
+                import json
+                from collections import defaultdict
+
+                spreadsheet_updates = defaultdict(lambda: {
+                    'spreadsheet_id': None,
+                    'spreadsheet_title': None,
+                    'spreadsheet_url': None,
+                    'sheet_type': None,
+                    'count': 0,
+                    'organizations': set(),
+                    'users': set(),
+                    'latest_update': None
+                })
+
+                for row in cursor.fetchall():
+                    try:
+                        data = json.loads(row['data_json']) if row['data_json'] else {}
+
+                        # Skip empty rows
+                        non_empty_values = [v for v in data.values() if v and str(v).strip()]
+                        if len(non_empty_values) == 0:
+                            continue
+
+                        # Skip question definition rows
+                        question_count = sum(1 for v in data.values() if v and '?' in str(v))
+                        if question_count > len(non_empty_values) * 0.8:
+                            continue
+
+                        spreadsheet_id = row['spreadsheet_id']
+
+                        # Extract organization and user
+                        organization = None
+                        user_name = None
+
+                        for key, value in data.items():
+                            if value and str(value).strip():
+                                key_lower = key.lower()
+                                value_str = str(value).strip()
+
+                                if ('organization' in key_lower or 'company' in key_lower) and len(value_str) < 100:
+                                    organization = value_str
+                                elif ('name' in key_lower or 'respondent' in key_lower) and len(value_str) < 100 and not '?' in value_str:
+                                    if not user_name or len(value_str) > len(user_name):
+                                        user_name = value_str
+
+                        # Update spreadsheet summary
+                        summary = spreadsheet_updates[spreadsheet_id]
+                        summary['spreadsheet_id'] = spreadsheet_id
+                        summary['spreadsheet_title'] = row['spreadsheet_title']
+                        summary['sheet_type'] = row['sheet_type']
+                        summary['count'] += 1
+
+                        # Get spreadsheet URL
+                        try:
+                            summary['spreadsheet_url'] = row['spreadsheet_url'] if 'spreadsheet_url' in row.keys() else f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/edit"
+                        except:
+                            summary['spreadsheet_url'] = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/edit"
+
+                        if organization:
+                            summary['organizations'].add(organization)
+                        if user_name:
+                            summary['users'].add(user_name)
+
+                        if not summary['latest_update'] or row['created_at'] > summary['latest_update']:
+                            summary['latest_update'] = row['created_at']
+
+                    except Exception as e:
+                        logger.warning(f"Error processing summary row {row['id']}: {e}")
+                        continue
+
+                # Convert to list and format
+                result = []
+                for spreadsheet_id, summary in spreadsheet_updates.items():
+                    result.append({
+                        'spreadsheet_id': summary['spreadsheet_id'],
+                        'spreadsheet_title': summary['spreadsheet_title'],
+                        'spreadsheet_url': summary['spreadsheet_url'],
+                        'sheet_type': summary['sheet_type'],
+                        'update_count': summary['count'],
+                        'organizations': sorted(list(summary['organizations'])),
+                        'organization_count': len(summary['organizations']),
+                        'user_count': len(summary['users']),
+                        'latest_update': summary['latest_update']
+                    })
+
+                # Sort by latest update
+                result.sort(key=lambda x: x['latest_update'] or '', reverse=True)
+
+                logger.info(f"✅ Retrieved summary for {len(result)} spreadsheets")
+                return result
+
+        except Exception as e:
+            logger.error(f"❌ Error getting updates summary: {e}")
             return []
 
 # Initialize database on Railway
@@ -680,7 +860,19 @@ def dashboard():
             logger.error(f"❌ Error getting latest updates: {updates_error}")
             latest_updates = []
 
-        return render_template('dashboard.html', stats=stats, spreadsheets=spreadsheets, latest_updates=latest_updates)
+        # Get updates summary grouped by spreadsheet
+        try:
+            updates_summary = db.get_updates_summary(50)
+            logger.info(f"✅ Retrieved summary for {len(updates_summary)} spreadsheets")
+        except Exception as summary_error:
+            logger.error(f"❌ Error getting updates summary: {summary_error}")
+            updates_summary = []
+
+        return render_template('dashboard.html',
+                             stats=stats,
+                             spreadsheets=spreadsheets,
+                             latest_updates=latest_updates,
+                             updates_summary=updates_summary)
 
     except Exception as e:
         logger.error(f"❌ Dashboard route error: {str(e)}")
@@ -2096,16 +2288,11 @@ def comprehensive_status_check():
                 question_count = 0
                 tables = []
 
-                    status['components']['survey_database'] = {
-                        'status': 'healthy',
-                        'questions': question_count,
-                        'tables': tables
-                    }
-            else:
-                status['components']['survey_database'] = {
-                    'status': 'missing',
-                    'message': 'Survey database file not found'
-                }
+            status['components']['survey_database'] = {
+                'status': 'healthy' if question_count > 0 else 'missing',
+                'questions': question_count,
+                'tables': tables
+            }
         except Exception as e:
             status['components']['survey_database'] = {
                 'status': 'error',

@@ -1,412 +1,129 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard - Surveyor Data Viewer{% endblock %}
+{% block title %}Dashboard - JJF Survey Analytics{% endblock %}
 
 {% block header %}
 <div class="mb-8">
     <h1 class="text-3xl font-bold text-gray-900 mb-2">
-        <i class="fas fa-tachometer-alt text-survey-blue mr-3"></i>
-        Dashboard
+        <i class="fas fa-home text-survey-blue mr-3"></i>
+        Survey Dashboard
     </h1>
-    <p class="text-gray-600">Overview of your Google Sheets survey data and extraction jobs</p>
+    <p class="text-gray-600">Latest updates and quick access to your survey data</p>
 </div>
 {% endblock %}
 
 {% block content %}
-<!-- Statistics Cards -->
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+<!-- Quick Stats -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
     <!-- Total Spreadsheets -->
     <div class="bg-white rounded-lg shadow-md p-6 hover-scale">
-        <div class="flex items-center">
-            <div class="flex-shrink-0">
-                <div class="w-12 h-12 bg-survey-blue bg-opacity-10 rounded-lg flex items-center justify-center">
-                    <i class="fas fa-table text-survey-blue text-xl"></i>
-                </div>
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm font-medium text-gray-500 mb-1">Survey Spreadsheets</p>
+                <p class="text-3xl font-bold text-gray-900">{{ stats.total_spreadsheets }}</p>
+                <p class="text-xs text-gray-500 mt-1">{{ stats.total_rows }} total responses</p>
             </div>
-            <div class="ml-4">
-                <p class="text-sm font-medium text-gray-500">Total Spreadsheets</p>
-                <p class="text-2xl font-bold text-gray-900">{{ stats.total_spreadsheets }}</p>
-            </div>
-        </div>
-    </div>
-
-    <!-- Total Rows -->
-    <div class="bg-white rounded-lg shadow-md p-6 hover-scale">
-        <div class="flex items-center">
-            <div class="flex-shrink-0">
-                <div class="w-12 h-12 bg-survey-green bg-opacity-10 rounded-lg flex items-center justify-center">
-                    <i class="fas fa-list text-survey-green text-xl"></i>
-                </div>
-            </div>
-            <div class="ml-4">
-                <p class="text-sm font-medium text-gray-500">Total Data Rows</p>
-                <p class="text-2xl font-bold text-gray-900">{{ stats.total_rows }}</p>
+            <div class="w-12 h-12 bg-survey-blue bg-opacity-10 rounded-lg flex items-center justify-center">
+                <i class="fas fa-table text-survey-blue text-2xl"></i>
             </div>
         </div>
     </div>
 
-    <!-- Extraction Jobs -->
+    <!-- Latest Updates -->
     <div class="bg-white rounded-lg shadow-md p-6 hover-scale">
-        <div class="flex items-center">
-            <div class="flex-shrink-0">
-                <div class="w-12 h-12 bg-survey-purple bg-opacity-10 rounded-lg flex items-center justify-center">
-                    <i class="fas fa-cogs text-survey-purple text-xl"></i>
-                </div>
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm font-medium text-gray-500 mb-1">Recent Updates</p>
+                <p class="text-3xl font-bold text-gray-900">{{ latest_updates|length }}</p>
+                <p class="text-xs text-gray-500 mt-1">in the last sync</p>
             </div>
-            <div class="ml-4">
-                <p class="text-sm font-medium text-gray-500">Extraction Jobs</p>
-                <p class="text-2xl font-bold text-gray-900">{{ stats.total_jobs }}</p>
+            <div class="w-12 h-12 bg-survey-green bg-opacity-10 rounded-lg flex items-center justify-center">
+                <i class="fas fa-sync-alt text-survey-green text-2xl"></i>
             </div>
         </div>
     </div>
 
-    <!-- Latest Job Status -->
+    <!-- System Status -->
     <div class="bg-white rounded-lg shadow-md p-6 hover-scale">
-        <div class="flex items-center">
-            <div class="flex-shrink-0">
-                <div class="w-12 h-12 {% if stats.latest_job and stats.latest_job.status == 'completed' %}bg-green-100{% elif stats.latest_job and stats.latest_job.status == 'failed' %}bg-red-100{% else %}bg-yellow-100{% endif %} rounded-lg flex items-center justify-center">
-                    <i class="fas fa-{% if stats.latest_job and stats.latest_job.status == 'completed' %}check-circle text-green-600{% elif stats.latest_job and stats.latest_job.status == 'failed' %}exclamation-triangle text-red-600{% else %}clock text-yellow-600{% endif %} text-xl"></i>
-                </div>
-            </div>
-            <div class="ml-4">
-                <p class="text-sm font-medium text-gray-500">Latest Job</p>
-                <p class="text-lg font-bold {% if stats.latest_job and stats.latest_job.status == 'completed' %}text-green-600{% elif stats.latest_job and stats.latest_job.status == 'failed' %}text-red-600{% else %}text-yellow-600{% endif %}">
-                    {% if stats.latest_job %}
-                        {{ stats.latest_job.status|title }}
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm font-medium text-gray-500 mb-1">System Status</p>
+                <p class="text-3xl font-bold {% if stats.latest_job and stats.latest_job.status == 'completed' %}text-green-600{% else %}text-yellow-600{% endif %}">
+                    {% if stats.latest_job and stats.latest_job.status == 'completed' %}
+                        Healthy
                     {% else %}
-                        No Jobs
+                        Running
                     {% endif %}
                 </p>
+                <p class="text-xs text-gray-500 mt-1">Last sync: {{ stats.latest_job.completed_at|datetime if stats.latest_job and stats.latest_job.completed_at else 'Never' }}</p>
+            </div>
+            <div class="w-12 h-12 {% if stats.latest_job and stats.latest_job.status == 'completed' %}bg-green-100{% else %}bg-yellow-100{% endif %} rounded-lg flex items-center justify-center">
+                <i class="fas fa-{% if stats.latest_job and stats.latest_job.status == 'completed' %}check-circle text-green-600{% else %}clock text-yellow-600{% endif %} text-2xl"></i>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Sheet Types Distribution -->
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-    <!-- Sheet Types Chart -->
-    <div class="bg-white rounded-lg shadow-md p-6">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">
-            <i class="fas fa-chart-pie text-survey-blue mr-2"></i>
-            Sheet Types Distribution
+<!-- Survey Spreadsheets -->
+<div class="bg-white rounded-lg shadow-md p-6 mb-8">
+    <div class="flex items-center justify-between mb-6">
+        <h3 class="text-xl font-semibold text-gray-900">
+            <i class="fas fa-table text-survey-blue mr-2"></i>
+            Survey Spreadsheets
         </h3>
-        <div class="space-y-4">
-            {% for sheet_type in stats.sheet_types %}
-            <div class="flex items-center justify-between">
+        <a href="{{ url_for('spreadsheets') }}"
+           class="text-survey-blue hover:text-blue-700 text-sm font-medium transition-colors">
+            View All <i class="fas fa-arrow-right ml-1"></i>
+        </a>
+    </div>
+
+    {% if spreadsheets %}
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {% for sheet in spreadsheets %}
+        <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+            <div class="flex items-start justify-between mb-3">
                 <div class="flex items-center">
-                    <div class="w-4 h-4 rounded-full mr-3 
-                        {% if sheet_type.sheet_type == 'survey' %}bg-survey-blue
-                        {% elif sheet_type.sheet_type == 'assessment' %}bg-survey-green
-                        {% elif sheet_type.sheet_type == 'inventory' %}bg-survey-purple
-                        {% else %}bg-gray-400{% endif %}"></div>
-                    <span class="text-sm font-medium text-gray-700 capitalize">{{ sheet_type.sheet_type or 'Unknown' }}</span>
-                </div>
-                <div class="flex items-center space-x-2">
-                    <span class="text-sm text-gray-500">{{ sheet_type.count }} sheets</span>
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
-                        {% if sheet_type.with_data > 0 %}bg-green-100 text-green-800{% else %}bg-gray-100 text-gray-800{% endif %}">
-                        {{ sheet_type.with_data }} with data
+                    <div class="w-10 h-10 rounded-lg flex items-center justify-center text-white text-sm font-bold mr-3
+                        {% if sheet.sheet_type == 'survey' %}bg-survey-blue
+                        {% elif sheet.sheet_type == 'assessment' %}bg-survey-green
+                        {% elif sheet.sheet_type == 'inventory' %}bg-survey-purple
+                        {% else %}bg-gray-400{% endif %}">
+                        {% if sheet.sheet_type == 'survey' %}S
+                        {% elif sheet.sheet_type == 'assessment' %}A
+                        {% elif sheet.sheet_type == 'inventory' %}I
+                        {% else %}?{% endif %}
+                    </div>
+                    <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium capitalize
+                        {% if sheet.sheet_type == 'survey' %}bg-blue-100 text-blue-800
+                        {% elif sheet.sheet_type == 'assessment' %}bg-green-100 text-green-800
+                        {% elif sheet.sheet_type == 'inventory' %}bg-purple-100 text-purple-800
+                        {% else %}bg-gray-100 text-gray-800{% endif %}">
+                        {{ sheet.sheet_type or 'unknown' }}
                     </span>
                 </div>
             </div>
-            {% endfor %}
-        </div>
-    </div>
 
-    <!-- Latest Job Details -->
-    <div class="bg-white rounded-lg shadow-md p-6">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">
-            <i class="fas fa-info-circle text-survey-blue mr-2"></i>
-            Latest Extraction Job
-        </h3>
-        {% if stats.latest_job %}
-        <div class="space-y-3">
-            <div class="flex justify-between items-center">
-                <span class="text-sm font-medium text-gray-500">Job Name:</span>
-                <span class="text-sm text-gray-900 font-mono">{{ stats.latest_job.job_name }}</span>
+            <h4 class="text-sm font-semibold text-gray-900 mb-2 line-clamp-2">{{ sheet.title }}</h4>
+
+            <div class="flex items-center justify-between text-xs text-gray-500 mb-3">
+                <span><i class="fas fa-list-ol mr-1"></i>{{ sheet.row_count }} rows</span>
+                <span><i class="fas fa-clock mr-1"></i>{{ sheet.last_synced|datetime }}</span>
             </div>
-            <div class="flex justify-between items-center">
-                <span class="text-sm font-medium text-gray-500">Status:</span>
-                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                    {% if stats.latest_job.status == 'completed' %}bg-green-100 text-green-800
-                    {% elif stats.latest_job.status == 'failed' %}bg-red-100 text-red-800
-                    {% else %}bg-yellow-100 text-yellow-800{% endif %}">
-                    {{ stats.latest_job.status|title }}
-                </span>
+
+            <div class="flex items-center space-x-2">
+                <a href="{{ url_for('view_spreadsheet', spreadsheet_id=sheet.spreadsheet_id) }}"
+                   class="flex-1 text-center px-3 py-2 bg-survey-blue text-white text-xs font-medium rounded hover:bg-blue-700 transition-colors">
+                    <i class="fas fa-eye mr-1"></i>View Data
+                </a>
+                <a href="https://docs.google.com/spreadsheets/d/{{ sheet.spreadsheet_id }}/edit"
+                   target="_blank"
+                   class="px-3 py-2 border border-gray-300 text-gray-700 text-xs font-medium rounded hover:bg-gray-50 transition-colors"
+                   title="Open in Google Sheets">
+                    <i class="fas fa-external-link-alt"></i>
+                </a>
             </div>
-            <div class="flex justify-between items-center">
-                <span class="text-sm font-medium text-gray-500">Success Rate:</span>
-                <span class="text-sm text-gray-900">
-                    {{ stats.latest_job.successful_spreadsheets }}/{{ stats.latest_job.total_spreadsheets }}
-                    ({{ "%.1f"|format((stats.latest_job.successful_spreadsheets / stats.latest_job.total_spreadsheets * 100) if stats.latest_job.total_spreadsheets > 0 else 0) }}%)
-                </span>
-            </div>
-            <div class="flex justify-between items-center">
-                <span class="text-sm font-medium text-gray-500">Rows Extracted:</span>
-                <span class="text-sm text-gray-900">{{ stats.latest_job.total_rows }}</span>
-            </div>
-            <div class="flex justify-between items-center">
-                <span class="text-sm font-medium text-gray-500">Started:</span>
-                <span class="text-sm text-gray-900">{{ stats.latest_job.started_at|datetime }}</span>
-            </div>
-            {% if stats.latest_job.completed_at %}
-            <div class="flex justify-between items-center">
-                <span class="text-sm font-medium text-gray-500">Completed:</span>
-                <span class="text-sm text-gray-900">{{ stats.latest_job.completed_at|datetime }}</span>
-            </div>
-            {% endif %}
         </div>
-        {% else %}
-        <div class="text-center py-8">
-            <i class="fas fa-inbox text-gray-400 text-3xl mb-3"></i>
-            <p class="text-gray-500">No extraction jobs found</p>
-            <p class="text-sm text-gray-400 mt-1">Run the data extractor to see job information</p>
-        </div>
-        {% endif %}
-    </div>
-</div>
-
-<!-- Latest Updates and Recent Spreadsheets -->
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-    <!-- Latest Updates -->
-    <div class="bg-white rounded-lg shadow-md p-6">
-        <div class="flex items-center justify-between mb-6">
-            <h3 class="text-lg font-semibold text-gray-900">
-                <i class="fas fa-clock text-survey-green mr-2"></i>
-                Latest Updates
-            </h3>
-            <span class="text-sm text-gray-500">Last 20 changes</span>
-        </div>
-
-        {% if latest_updates %}
-        <div class="space-y-4 max-h-96 overflow-y-auto">
-            {% for update in latest_updates %}
-            <div class="border-l-4 pl-4 py-2 hover:bg-gray-50 rounded-r-lg transition-colors
-                {% if update.sheet_type == 'survey' %}border-survey-blue
-                {% elif update.sheet_type == 'assessment' %}border-survey-green
-                {% elif update.sheet_type == 'inventory' %}border-survey-purple
-                {% else %}border-gray-300{% endif %}">
-
-                <div class="flex items-start justify-between">
-                    <div class="flex-1 min-w-0">
-                        <div class="flex items-center space-x-2 mb-1">
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
-                                {% if update.sheet_type == 'survey' %}bg-survey-blue bg-opacity-10 text-survey-blue
-                                {% elif update.sheet_type == 'assessment' %}bg-survey-green bg-opacity-10 text-survey-green
-                                {% elif update.sheet_type == 'inventory' %}bg-survey-purple bg-opacity-10 text-survey-purple
-                                {% else %}bg-gray-100 text-gray-800{% endif %}">
-                                {{ update.sheet_type|title }}
-                            </span>
-                            <span class="text-xs text-gray-500">Row {{ update.row_number }}</span>
-                            <span class="text-xs text-gray-500">{{ update.data_count }} fields</span>
-                        </div>
-
-                        <div class="flex items-center justify-between mb-1">
-                            <p class="text-sm font-medium text-gray-900 truncate flex-1">
-                                {{ update.spreadsheet_title }}
-                            </p>
-                            <a href="{{ update.spreadsheet_url }}" target="_blank"
-                               class="ml-2 text-survey-blue hover:text-survey-blue-dark text-xs flex-shrink-0"
-                               title="Open in Google Sheets">
-                                <i class="fas fa-external-link-alt"></i>
-                            </a>
-                        </div>
-
-                        <!-- Data Changes Preview -->
-                        <div class="text-xs text-gray-600 space-y-1">
-                            {% if update.key_value_pairs %}
-                                <div class="bg-gray-50 rounded p-2 space-y-2">
-                                    <p class="font-medium text-gray-700 mb-1">Data Added:</p>
-
-                                    <!-- Show answers first -->
-                                    {% set answers = [] %}
-                                    {% set questions = [] %}
-                                    {% for pair in update.key_value_pairs %}
-                                        {% if pair.is_question %}
-                                            {% set _ = questions.append(pair) %}
-                                        {% else %}
-                                            {% set _ = answers.append(pair) %}
-                                        {% endif %}
-                                    {% endfor %}
-
-                                    <!-- Display answers (user responses) -->
-                                    {% for pair in answers[:2] %}
-                                    <div class="border-l-2 border-green-400 pl-2">
-                                        <div class="flex items-start">
-                                            <span class="inline-block bg-green-100 text-green-800 text-xs px-1 rounded mr-2 flex-shrink-0">Answer</span>
-                                            <div class="min-w-0 flex-1">
-                                                <p class="font-medium text-gray-700 text-xs">{{ pair.key|replace('_', ' ')|replace('-', ' ')|title }}</p>
-                                                <p class="text-gray-800 text-xs break-words">
-                                                    {% if pair.value|length > 100 %}
-                                                        {{ pair.value[:97] }}...
-                                                    {% else %}
-                                                        {{ pair.value }}
-                                                    {% endif %}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    {% endfor %}
-
-                                    <!-- Display questions (if no answers or space remaining) -->
-                                    {% if answers|length == 0 %}
-                                        {% for pair in questions[:2] %}
-                                        <div class="border-l-2 border-blue-400 pl-2">
-                                            <div class="flex items-start">
-                                                <span class="inline-block bg-blue-100 text-blue-800 text-xs px-1 rounded mr-2 flex-shrink-0">Question</span>
-                                                <div class="min-w-0 flex-1">
-                                                    <p class="font-medium text-gray-700 text-xs">{{ pair.key|replace('_', ' ')|replace('-', ' ')|title }}</p>
-                                                    <p class="text-gray-600 text-xs break-words italic">
-                                                        {% if pair.value|length > 80 %}
-                                                            {{ pair.value[:77] }}...
-                                                        {% else %}
-                                                            {{ pair.value }}
-                                                        {% endif %}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        {% endfor %}
-                                    {% endif %}
-
-                                    {% set total_shown = (answers[:2]|length) + (questions[:2]|length if answers|length == 0 else 0) %}
-                                    {% if update.key_value_pairs|length > total_shown %}
-                                    <p class="text-gray-500 italic text-xs">+ {{ update.key_value_pairs|length - total_shown }} more fields</p>
-                                    {% endif %}
-                                </div>
-                            {% else %}
-                                <p class="italic text-gray-500">No data preview available</p>
-                            {% endif %}
-
-                            <!-- Expandable Details -->
-                            {% if update.key_value_pairs|length > 3 %}
-                            <div class="mt-2">
-                                <button onclick="toggleDetails('update-{{ update.id }}')"
-                                        class="text-survey-blue hover:text-survey-blue-dark text-xs font-medium">
-                                    <i class="fas fa-chevron-down mr-1" id="icon-update-{{ update.id }}"></i>
-                                    View All {{ update.data_count }} Fields
-                                </button>
-                                <div id="details-update-{{ update.id }}" class="hidden mt-2 bg-gray-50 rounded p-2 space-y-2 max-h-40 overflow-y-auto">
-                                    {% for pair in update.key_value_pairs %}
-                                    <div class="border-l-2 {{ 'border-green-400' if not pair.is_question else 'border-blue-400' }} pl-2">
-                                        <div class="flex items-start">
-                                            <span class="inline-block {{ 'bg-green-100 text-green-800' if not pair.is_question else 'bg-blue-100 text-blue-800' }} text-xs px-1 rounded mr-2 flex-shrink-0">
-                                                {{ 'Answer' if not pair.is_question else 'Question' }}
-                                            </span>
-                                            <div class="min-w-0 flex-1">
-                                                <p class="font-medium text-gray-700 text-xs">{{ pair.key|replace('_', ' ')|replace('-', ' ')|title }}</p>
-                                                <p class="text-gray-800 text-xs break-words {{ 'italic text-gray-600' if pair.is_question else '' }}">{{ pair.value }}</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    {% endfor %}
-                                    {% if update.has_more_data %}
-                                    <p class="text-gray-500 italic text-xs">... and more fields</p>
-                                    {% endif %}
-                                </div>
-                            </div>
-                            {% endif %}
-                        </div>
-                    </div>
-
-                    <div class="flex-shrink-0 ml-4">
-                        <p class="text-xs text-gray-500">
-                            {% if update.created_at %}
-                                {{ update.created_at|datetime }}
-                            {% else %}
-                                Unknown time
-                            {% endif %}
-                        </p>
-                    </div>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-        {% else %}
-        <div class="text-center py-8">
-            <i class="fas fa-clock text-gray-400 text-3xl mb-4"></i>
-            <p class="text-gray-500">No recent updates</p>
-            <p class="text-sm text-gray-400 mt-2">Data changes will appear here</p>
-        </div>
-        {% endif %}
-    </div>
-
-    <!-- Recent Spreadsheets -->
-    <div class="bg-white rounded-lg shadow-md p-6">
-        <div class="flex items-center justify-between mb-6">
-            <h3 class="text-lg font-semibold text-gray-900">
-                <i class="fas fa-table text-survey-blue mr-2"></i>
-                Recent Spreadsheets
-            </h3>
-            <a href="{{ url_for('spreadsheets') }}"
-               class="text-survey-blue hover:text-blue-700 text-sm font-medium transition-colors">
-                View All <i class="fas fa-arrow-right ml-1"></i>
-            </a>
-        </div>
-    
-    {% if spreadsheets %}
-    <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
-                <tr>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rows</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Synced</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                </tr>
-            </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
-                {% for sheet in spreadsheets[:5] %}
-                <tr class="table-row-hover">
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        <div class="flex items-center">
-                            <div class="flex-shrink-0 w-8 h-8">
-                                <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium
-                                    {% if sheet.sheet_type == 'survey' %}bg-survey-blue
-                                    {% elif sheet.sheet_type == 'assessment' %}bg-survey-green
-                                    {% elif sheet.sheet_type == 'inventory' %}bg-survey-purple
-                                    {% else %}bg-gray-400{% endif %}">
-                                    {% if sheet.sheet_type == 'survey' %}S
-                                    {% elif sheet.sheet_type == 'assessment' %}A
-                                    {% elif sheet.sheet_type == 'inventory' %}I
-                                    {% else %}?{% endif %}
-                                </div>
-                            </div>
-                            <div class="ml-4">
-                                <div class="text-sm font-medium text-gray-900">{{ sheet.title }}</div>
-                                <div class="text-sm text-gray-500 font-mono">{{ sheet.spreadsheet_id|truncate_id }}</div>
-                            </div>
-                        </div>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize
-                            {% if sheet.sheet_type == 'survey' %}bg-blue-100 text-blue-800
-                            {% elif sheet.sheet_type == 'assessment' %}bg-green-100 text-green-800
-                            {% elif sheet.sheet_type == 'inventory' %}bg-purple-100 text-purple-800
-                            {% else %}bg-gray-100 text-gray-800{% endif %}">
-                            {{ sheet.sheet_type or 'unknown' }}
-                        </span>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <div class="flex items-center">
-                            <i class="fas fa-list-ol text-gray-400 mr-2"></i>
-                            {{ sheet.row_count }}
-                        </div>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {{ sheet.last_synced|datetime }}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <a href="{{ url_for('view_spreadsheet', spreadsheet_id=sheet.spreadsheet_id) }}" 
-                           class="text-survey-blue hover:text-blue-700 transition-colors">
-                            <i class="fas fa-eye mr-1"></i>View
-                        </a>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        {% endfor %}
     </div>
     {% else %}
     <div class="text-center py-12">
@@ -415,23 +132,232 @@
         <p class="text-gray-500">Run the data extractor to import Google Sheets data</p>
     </div>
     {% endif %}
-    </div>
 </div>
+
+<!-- Updates Summary by Spreadsheet -->
+<div class="bg-white rounded-lg shadow-md p-6 mb-8">
+    <div class="flex items-center justify-between mb-6">
+        <h3 class="text-xl font-semibold text-gray-900">
+            <i class="fas fa-chart-bar text-survey-green mr-2"></i>
+            Recent Activity Summary
+        </h3>
+        <span class="text-sm text-gray-500">Grouped by spreadsheet</span>
+    </div>
+
+    {% if updates_summary %}
+    <div class="space-y-4">
+        {% for summary in updates_summary %}
+        <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+            <div class="flex items-start justify-between mb-3">
+                <div class="flex-1">
+                    <div class="flex items-center space-x-2 mb-2">
+                        <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium
+                            {% if summary.sheet_type == 'survey' %}bg-survey-blue bg-opacity-10 text-survey-blue
+                            {% elif summary.sheet_type == 'assessment' %}bg-survey-green bg-opacity-10 text-survey-green
+                            {% elif summary.sheet_type == 'inventory' %}bg-survey-purple bg-opacity-10 text-survey-purple
+                            {% else %}bg-gray-100 text-gray-800{% endif %}">
+                            {{ summary.sheet_type|title }}
+                        </span>
+                        <span class="text-xs text-gray-500">
+                            <i class="fas fa-clock mr-1"></i>{{ summary.latest_update|datetime }}
+                        </span>
+                    </div>
+                    <h4 class="text-sm font-semibold text-gray-900 mb-2">{{ summary.spreadsheet_title }}</h4>
+                </div>
+                <a href="{{ summary.spreadsheet_url }}" target="_blank"
+                   class="ml-2 px-3 py-1 border border-gray-300 text-gray-700 text-xs font-medium rounded hover:bg-gray-50 transition-colors flex-shrink-0"
+                   title="Open in Google Sheets">
+                    <i class="fas fa-external-link-alt mr-1"></i>Open
+                </a>
+            </div>
+
+            <!-- Summary Stats -->
+            <div class="grid grid-cols-3 gap-4 bg-gray-50 rounded-lg p-3">
+                <div class="text-center">
+                    <div class="text-2xl font-bold text-survey-blue">{{ summary.update_count }}</div>
+                    <div class="text-xs text-gray-600">Responses</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-2xl font-bold text-survey-green">{{ summary.organization_count }}</div>
+                    <div class="text-xs text-gray-600">Organizations</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-2xl font-bold text-survey-purple">{{ summary.user_count }}</div>
+                    <div class="text-xs text-gray-600">Users</div>
+                </div>
+            </div>
+
+            <!-- Organizations List -->
+            {% if summary.organizations %}
+            <div class="mt-3 pt-3 border-t border-gray-200">
+                <p class="text-xs font-medium text-gray-700 mb-2">
+                    <i class="fas fa-building mr-1"></i>Organizations:
+                </p>
+                <div class="flex flex-wrap gap-2">
+                    {% for org in summary.organizations[:5] %}
+                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-50 text-blue-700">
+                        {{ org }}
+                    </span>
+                    {% endfor %}
+                    {% if summary.organizations|length > 5 %}
+                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-600">
+                        +{{ summary.organizations|length - 5 }} more
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-12">
+        <i class="fas fa-chart-bar text-gray-400 text-4xl mb-4"></i>
+        <p class="text-gray-500">No recent activity</p>
+        <p class="text-sm text-gray-400 mt-2">New survey responses will appear here</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Latest Updates (Detailed View) -->
+<div class="bg-white rounded-lg shadow-md p-6 mb-8">
+    <div class="flex items-center justify-between mb-6">
+        <h3 class="text-xl font-semibold text-gray-900">
+            <i class="fas fa-list text-survey-blue mr-2"></i>
+            Latest Individual Responses
+        </h3>
+        <span class="text-sm text-gray-500">Detailed view</span>
+    </div>
+
+    {% if latest_updates %}
+    <div class="space-y-4 max-h-[600px] overflow-y-auto">
+        {% for update in latest_updates %}
+        <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+            <!-- Header with spreadsheet info -->
+            <div class="flex items-start justify-between mb-3">
+                <div class="flex-1">
+                    <div class="flex items-center space-x-2 mb-2">
+                        <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium
+                            {% if update.sheet_type == 'survey' %}bg-survey-blue bg-opacity-10 text-survey-blue
+                            {% elif update.sheet_type == 'assessment' %}bg-survey-green bg-opacity-10 text-survey-green
+                            {% elif update.sheet_type == 'inventory' %}bg-survey-purple bg-opacity-10 text-survey-purple
+                            {% else %}bg-gray-100 text-gray-800{% endif %}">
+                            {{ update.sheet_type|title }}
+                        </span>
+                        <span class="text-xs text-gray-500">
+                            <i class="fas fa-clock mr-1"></i>{{ update.created_at|datetime }}
+                        </span>
+                    </div>
+                    <h4 class="text-sm font-semibold text-gray-900 mb-1">{{ update.spreadsheet_title }}</h4>
+                </div>
+                <a href="{{ update.spreadsheet_url }}" target="_blank"
+                   class="ml-2 px-3 py-1 border border-gray-300 text-gray-700 text-xs font-medium rounded hover:bg-gray-50 transition-colors flex-shrink-0"
+                   title="Open in Google Sheets">
+                    <i class="fas fa-external-link-alt mr-1"></i>Open
+                </a>
+            </div>
+
+            <!-- User and Organization Info -->
+            {% if update.user_name or update.user_email or update.organization %}
+            <div class="bg-blue-50 rounded-lg p-3 mb-3">
+                <div class="flex items-start space-x-3">
+                    <div class="w-8 h-8 bg-survey-blue rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                        {% if update.user_name %}
+                            {{ update.user_name[0]|upper }}
+                        {% elif update.user_email %}
+                            {{ update.user_email[0]|upper }}
+                        {% else %}
+                            <i class="fas fa-user text-xs"></i>
+                        {% endif %}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        {% if update.user_name %}
+                        <p class="text-sm font-semibold text-gray-900">{{ update.user_name }}</p>
+                        {% endif %}
+                        {% if update.user_email %}
+                        <p class="text-xs text-gray-600"><i class="fas fa-envelope mr-1"></i>{{ update.user_email }}</p>
+                        {% endif %}
+                        {% if update.organization %}
+                        <p class="text-xs text-gray-600"><i class="fas fa-building mr-1"></i>{{ update.organization }}</p>
+                        {% endif %}
+                        {% if not update.user_name and not update.user_email and not update.organization %}
+                        <p class="text-xs text-gray-500 italic">Anonymous response</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Response Summary -->
+            <div class="border-t border-gray-200 pt-3">
+                <div class="flex items-center justify-between text-xs text-gray-600 mb-2">
+                    <span class="font-medium">Response Data:</span>
+                    <span class="text-gray-500">{{ update.data_count }} fields submitted</span>
+                </div>
+
+                {% if update.key_value_pairs %}
+                    <!-- Show key responses (non-questions) -->
+                    {% set answers = [] %}
+                    {% for pair in update.key_value_pairs %}
+                        {% if not pair.is_question %}
+                            {% set _ = answers.append(pair) %}
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if answers %}
+                    <div class="space-y-2">
+                        {% for pair in answers[:3] %}
+                        <div class="bg-gray-50 rounded p-2">
+                            <p class="text-xs font-medium text-gray-700 mb-1">{{ pair.key|replace('_', ' ')|replace('-', ' ')|title }}</p>
+                            <p class="text-xs text-gray-900">
+                                {% if pair.value|length > 150 %}
+                                    {{ pair.value[:147] }}...
+                                {% else %}
+                                    {{ pair.value }}
+                                {% endif %}
+                            </p>
+                        </div>
+                        {% endfor %}
+
+                        {% if answers|length > 3 %}
+                        <button onclick="toggleDetails('update-{{ update.id }}')"
+                                class="text-survey-blue hover:text-survey-blue-dark text-xs font-medium w-full text-left">
+                            <i class="fas fa-chevron-down mr-1" id="icon-update-{{ update.id }}"></i>
+                            Show {{ answers|length - 3 }} more responses
+                        </button>
+                        <div id="details-update-{{ update.id }}" class="hidden space-y-2 mt-2">
+                            {% for pair in answers[3:] %}
+                            <div class="bg-gray-50 rounded p-2">
+                                <p class="text-xs font-medium text-gray-700 mb-1">{{ pair.key|replace('_', ' ')|replace('-', ' ')|title }}</p>
+                                <p class="text-xs text-gray-900">{{ pair.value }}</p>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% else %}
+                    <p class="text-xs text-gray-500 italic">No response data available</p>
+                    {% endif %}
+                {% else %}
+                    <p class="text-xs text-gray-500 italic">No data preview available</p>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-12">
+        <i class="fas fa-bell text-gray-400 text-4xl mb-4"></i>
+        <p class="text-gray-500">No recent updates</p>
+        <p class="text-sm text-gray-400 mt-2">New survey responses will appear here</p>
+    </div>
+    {% endif %}
+</div>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
-    // Auto-refresh dashboard every 5 minutes
-    setInterval(function() {
-        fetch('/api/stats')
-            .then(response => response.json())
-            .then(data => {
-                // Update stats if needed
-                console.log('Dashboard stats updated');
-            })
-            .catch(error => console.error('Error updating stats:', error));
-    }, 300000); // 5 minutes
-
     // Toggle details for latest updates
     function toggleDetails(updateId) {
         const details = document.getElementById('details-' + updateId);
@@ -447,5 +373,10 @@
             icon.classList.add('fa-chevron-down');
         }
     }
+
+    // Auto-refresh every 2 minutes
+    setTimeout(function() {
+        location.reload();
+    }, 120000);
 </script>
 {% endblock %}
