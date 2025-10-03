@@ -134,214 +134,130 @@
     {% endif %}
 </div>
 
-<!-- Updates Summary by Spreadsheet -->
+<!-- Recent Activity Summary -->
 <div class="bg-white rounded-lg shadow-md p-6 mb-8">
     <div class="flex items-center justify-between mb-6">
         <h3 class="text-xl font-semibold text-gray-900">
-            <i class="fas fa-chart-bar text-survey-green mr-2"></i>
+            <i class="fas fa-bell text-survey-green mr-2"></i>
             Recent Activity Summary
         </h3>
-        <span class="text-sm text-gray-500">Grouped by spreadsheet</span>
-    </div>
-
-    {% if updates_summary %}
-    <div class="space-y-4">
-        {% for summary in updates_summary %}
-        <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-            <div class="flex items-start justify-between mb-3">
-                <div class="flex-1">
-                    <div class="flex items-center space-x-2 mb-2">
-                        <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium
-                            {% if summary.sheet_type == 'survey' %}bg-survey-blue bg-opacity-10 text-survey-blue
-                            {% elif summary.sheet_type == 'assessment' %}bg-survey-green bg-opacity-10 text-survey-green
-                            {% elif summary.sheet_type == 'inventory' %}bg-survey-purple bg-opacity-10 text-survey-purple
-                            {% else %}bg-gray-100 text-gray-800{% endif %}">
-                            {{ summary.sheet_type|title }}
-                        </span>
-                        <span class="text-xs text-gray-500">
-                            <i class="fas fa-clock mr-1"></i>{{ summary.latest_update|datetime }}
-                        </span>
-                    </div>
-                    <h4 class="text-sm font-semibold text-gray-900 mb-2">{{ summary.spreadsheet_title }}</h4>
-                </div>
-                <a href="{{ summary.spreadsheet_url }}" target="_blank"
-                   class="ml-2 px-3 py-1 border border-gray-300 text-gray-700 text-xs font-medium rounded hover:bg-gray-50 transition-colors flex-shrink-0"
-                   title="Open in Google Sheets">
-                    <i class="fas fa-external-link-alt mr-1"></i>Open
-                </a>
-            </div>
-
-            <!-- Summary Stats -->
-            <div class="grid grid-cols-3 gap-4 bg-gray-50 rounded-lg p-3">
-                <div class="text-center">
-                    <div class="text-2xl font-bold text-survey-blue">{{ summary.update_count }}</div>
-                    <div class="text-xs text-gray-600">Responses</div>
-                </div>
-                <div class="text-center">
-                    <div class="text-2xl font-bold text-survey-green">{{ summary.organization_count }}</div>
-                    <div class="text-xs text-gray-600">Organizations</div>
-                </div>
-                <div class="text-center">
-                    <div class="text-2xl font-bold text-survey-purple">{{ summary.user_count }}</div>
-                    <div class="text-xs text-gray-600">Users</div>
-                </div>
-            </div>
-
-            <!-- Organizations List -->
-            {% if summary.organizations %}
-            <div class="mt-3 pt-3 border-t border-gray-200">
-                <p class="text-xs font-medium text-gray-700 mb-2">
-                    <i class="fas fa-building mr-1"></i>Organizations:
-                </p>
-                <div class="flex flex-wrap gap-2">
-                    {% for org in summary.organizations[:5] %}
-                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-50 text-blue-700">
-                        {{ org }}
-                    </span>
-                    {% endfor %}
-                    {% if summary.organizations|length > 5 %}
-                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-600">
-                        +{{ summary.organizations|length - 5 }} more
-                    </span>
-                    {% endif %}
-                </div>
-            </div>
-            {% endif %}
-        </div>
-        {% endfor %}
-    </div>
-    {% else %}
-    <div class="text-center py-12">
-        <i class="fas fa-chart-bar text-gray-400 text-4xl mb-4"></i>
-        <p class="text-gray-500">No recent activity</p>
-        <p class="text-sm text-gray-400 mt-2">New survey responses will appear here</p>
-    </div>
-    {% endif %}
-</div>
-
-<!-- Latest Updates (Detailed View) -->
-<div class="bg-white rounded-lg shadow-md p-6 mb-8">
-    <div class="flex items-center justify-between mb-6">
-        <h3 class="text-xl font-semibold text-gray-900">
-            <i class="fas fa-list text-survey-blue mr-2"></i>
-            Latest Individual Responses
-        </h3>
-        <span class="text-sm text-gray-500">Detailed view</span>
+        <span class="text-sm text-gray-500">Latest updates across all surveys</span>
     </div>
 
     {% if latest_updates %}
-    <div class="space-y-4 max-h-[600px] overflow-y-auto">
+    <div class="space-y-3">
         {% for update in latest_updates %}
         <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-            <!-- Header with spreadsheet info -->
-            <div class="flex items-start justify-between mb-3">
-                <div class="flex-1">
-                    <div class="flex items-center space-x-2 mb-2">
-                        <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium
-                            {% if update.sheet_type == 'survey' %}bg-survey-blue bg-opacity-10 text-survey-blue
-                            {% elif update.sheet_type == 'assessment' %}bg-survey-green bg-opacity-10 text-survey-green
-                            {% elif update.sheet_type == 'inventory' %}bg-survey-purple bg-opacity-10 text-survey-purple
-                            {% else %}bg-gray-100 text-gray-800{% endif %}">
-                            {{ update.sheet_type|title }}
-                        </span>
-                        <span class="text-xs text-gray-500">
-                            <i class="fas fa-clock mr-1"></i>{{ update.created_at|datetime }}
-                        </span>
+            <!-- Single line header: Sheet | Who | When -->
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center space-x-3 flex-1 min-w-0">
+                    <!-- Sheet Type Badge -->
+                    <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium flex-shrink-0
+                        {% if update.sheet_type == 'survey' %}bg-survey-blue bg-opacity-10 text-survey-blue
+                        {% elif update.sheet_type == 'assessment' %}bg-survey-green bg-opacity-10 text-survey-green
+                        {% elif update.sheet_type == 'inventory' %}bg-survey-purple bg-opacity-10 text-survey-purple
+                        {% else %}bg-gray-100 text-gray-800{% endif %}">
+                        {{ update.sheet_type|title }}
+                    </span>
+
+                    <!-- Sheet Name -->
+                    <h4 class="text-sm font-semibold text-gray-900 truncate">{{ update.spreadsheet_title }}</h4>
+
+                    <!-- Separator -->
+                    <span class="text-gray-300">•</span>
+
+                    <!-- Who -->
+                    <div class="flex items-center space-x-2 flex-shrink-0">
+                        {% if update.user_name %}
+                            <div class="w-6 h-6 bg-survey-blue rounded-full flex items-center justify-center text-white font-bold text-xs">
+                                {{ update.user_name[0]|upper }}
+                            </div>
+                            <span class="text-sm text-gray-700">{{ update.user_name }}</span>
+                        {% elif update.user_email %}
+                            <div class="w-6 h-6 bg-survey-blue rounded-full flex items-center justify-center text-white font-bold text-xs">
+                                {{ update.user_email[0]|upper }}
+                            </div>
+                            <span class="text-sm text-gray-700">{{ update.user_email.split('@')[0] }}</span>
+                        {% else %}
+                            <i class="fas fa-user text-gray-400 text-xs"></i>
+                            <span class="text-sm text-gray-500 italic">Anonymous</span>
+                        {% endif %}
                     </div>
-                    <h4 class="text-sm font-semibold text-gray-900 mb-1">{{ update.spreadsheet_title }}</h4>
+
+                    <!-- Organization -->
+                    {% if update.organization %}
+                    <span class="text-gray-300">•</span>
+                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-50 text-blue-700 flex-shrink-0">
+                        <i class="fas fa-building mr-1"></i>{{ update.organization }}
+                    </span>
+                    {% endif %}
+
+                    <!-- When -->
+                    <span class="text-gray-300">•</span>
+                    <span class="text-xs text-gray-500 flex-shrink-0">
+                        <i class="fas fa-clock mr-1"></i>{{ update.created_at|datetime }}
+                    </span>
                 </div>
+
+                <!-- Open in Sheets -->
                 <a href="{{ update.spreadsheet_url }}" target="_blank"
-                   class="ml-2 px-3 py-1 border border-gray-300 text-gray-700 text-xs font-medium rounded hover:bg-gray-50 transition-colors flex-shrink-0"
+                   class="ml-3 px-2 py-1 border border-gray-300 text-gray-700 text-xs rounded hover:bg-gray-50 transition-colors flex-shrink-0"
                    title="Open in Google Sheets">
-                    <i class="fas fa-external-link-alt mr-1"></i>Open
+                    <i class="fas fa-external-link-alt"></i>
                 </a>
             </div>
 
-            <!-- User and Organization Info -->
-            {% if update.user_name or update.user_email or update.organization %}
-            <div class="bg-blue-50 rounded-lg p-3 mb-3">
-                <div class="flex items-start space-x-3">
-                    <div class="w-8 h-8 bg-survey-blue rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                        {% if update.user_name %}
-                            {{ update.user_name[0]|upper }}
-                        {% elif update.user_email %}
-                            {{ update.user_email[0]|upper }}
-                        {% else %}
-                            <i class="fas fa-user text-xs"></i>
-                        {% endif %}
+            <!-- Response Summary (compact) -->
+            {% if update.key_value_pairs %}
+                {% set answers = [] %}
+                {% for pair in update.key_value_pairs %}
+                    {% if not pair.is_question %}
+                        {% set _ = answers.append(pair) %}
+                    {% endif %}
+                {% endfor %}
+
+                {% if answers %}
+                <div class="bg-gray-50 rounded-lg p-3">
+                    <div class="text-xs text-gray-600 mb-2">
+                        <span class="font-medium">Response Summary:</span>
+                        <span class="text-gray-500 ml-2">{{ answers|length }} fields</span>
                     </div>
-                    <div class="flex-1 min-w-0">
-                        {% if update.user_name %}
-                        <p class="text-sm font-semibold text-gray-900">{{ update.user_name }}</p>
-                        {% endif %}
-                        {% if update.user_email %}
-                        <p class="text-xs text-gray-600"><i class="fas fa-envelope mr-1"></i>{{ update.user_email }}</p>
-                        {% endif %}
-                        {% if update.organization %}
-                        <p class="text-xs text-gray-600"><i class="fas fa-building mr-1"></i>{{ update.organization }}</p>
-                        {% endif %}
-                        {% if not update.user_name and not update.user_email and not update.organization %}
-                        <p class="text-xs text-gray-500 italic">Anonymous response</p>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-            {% endif %}
 
-            <!-- Response Summary -->
-            <div class="border-t border-gray-200 pt-3">
-                <div class="flex items-center justify-between text-xs text-gray-600 mb-2">
-                    <span class="font-medium">Response Data:</span>
-                    <span class="text-gray-500">{{ update.data_count }} fields submitted</span>
-                </div>
-
-                {% if update.key_value_pairs %}
-                    <!-- Show key responses (non-questions) -->
-                    {% set answers = [] %}
-                    {% for pair in update.key_value_pairs %}
-                        {% if not pair.is_question %}
-                            {% set _ = answers.append(pair) %}
-                        {% endif %}
-                    {% endfor %}
-
-                    {% if answers %}
-                    <div class="space-y-2">
-                        {% for pair in answers[:3] %}
-                        <div class="bg-gray-50 rounded p-2">
-                            <p class="text-xs font-medium text-gray-700 mb-1">{{ pair.key|replace('_', ' ')|replace('-', ' ')|title }}</p>
-                            <p class="text-xs text-gray-900">
-                                {% if pair.value|length > 150 %}
-                                    {{ pair.value[:147] }}...
+                    <!-- Show first 2 key responses inline -->
+                    <div class="space-y-1">
+                        {% for pair in answers[:2] %}
+                        <div class="text-xs">
+                            <span class="font-medium text-gray-700">{{ pair.key|replace('_', ' ')|replace('-', ' ')|title }}:</span>
+                            <span class="text-gray-900 ml-1">
+                                {% if pair.value|length > 100 %}
+                                    {{ pair.value[:97] }}...
                                 {% else %}
                                     {{ pair.value }}
                                 {% endif %}
-                            </p>
+                            </span>
                         </div>
                         {% endfor %}
 
-                        {% if answers|length > 3 %}
+                        <!-- Show more button if there are additional responses -->
+                        {% if answers|length > 2 %}
                         <button onclick="toggleDetails('update-{{ update.id }}')"
-                                class="text-survey-blue hover:text-survey-blue-dark text-xs font-medium w-full text-left">
+                                class="text-survey-blue hover:text-survey-blue-dark text-xs font-medium mt-1">
                             <i class="fas fa-chevron-down mr-1" id="icon-update-{{ update.id }}"></i>
-                            Show {{ answers|length - 3 }} more responses
+                            Show {{ answers|length - 2 }} more fields
                         </button>
-                        <div id="details-update-{{ update.id }}" class="hidden space-y-2 mt-2">
-                            {% for pair in answers[3:] %}
-                            <div class="bg-gray-50 rounded p-2">
-                                <p class="text-xs font-medium text-gray-700 mb-1">{{ pair.key|replace('_', ' ')|replace('-', ' ')|title }}</p>
-                                <p class="text-xs text-gray-900">{{ pair.value }}</p>
+                        <div id="details-update-{{ update.id }}" class="hidden space-y-1 mt-2 pt-2 border-t border-gray-200">
+                            {% for pair in answers[2:] %}
+                            <div class="text-xs">
+                                <span class="font-medium text-gray-700">{{ pair.key|replace('_', ' ')|replace('-', ' ')|title }}:</span>
+                                <span class="text-gray-900 ml-1">{{ pair.value }}</span>
                             </div>
                             {% endfor %}
                         </div>
                         {% endif %}
                     </div>
-                    {% else %}
-                    <p class="text-xs text-gray-500 italic">No response data available</p>
-                    {% endif %}
-                {% else %}
-                    <p class="text-xs text-gray-500 italic">No data preview available</p>
+                </div>
                 {% endif %}
-            </div>
+            {% endif %}
         </div>
         {% endfor %}
     </div>
