@@ -2165,10 +2165,11 @@ def init_survey_database():
 
                 # Check if survey tables exist
                 cursor.execute("""
-                    SELECT COUNT(*) FROM information_schema.tables
+                    SELECT COUNT(*) as count FROM information_schema.tables
                     WHERE table_schema = 'public' AND table_name IN ('surveys', 'survey_questions')
                 """)
-                table_count = cursor.fetchone()[0]
+                result = cursor.fetchone()
+                table_count = result['count']
 
                 if table_count < 2:
                     # Initialize PostgreSQL survey tables if they don't exist
@@ -2185,13 +2186,13 @@ def init_survey_database():
 
                 survey_result = cursor.fetchone()
                 if survey_result:
-                    survey_id = survey_result[0]
+                    survey_id = survey_result['id']
                     results['steps'].append(f'Created survey with ID: {survey_id}')
                 else:
                     # Get existing survey ID
                     cursor.execute('SELECT id FROM surveys LIMIT 1')
                     survey_result = cursor.fetchone()
-                    survey_id = survey_result[0] if survey_result else 1
+                    survey_id = survey_result['id'] if survey_result else 1
                     results['steps'].append(f'Using existing survey ID: {survey_id}')
 
                 # Add sample questions
@@ -2217,10 +2218,10 @@ def init_survey_database():
                 results['steps'].append(f'Added {question_count} sample questions')
 
                 # Get final counts
-                cursor.execute('SELECT COUNT(*) FROM surveys')
-                survey_count = cursor.fetchone()[0]
-                cursor.execute('SELECT COUNT(*) FROM survey_questions')
-                question_count = cursor.fetchone()[0]
+                cursor.execute('SELECT COUNT(*) as count FROM surveys')
+                survey_count = cursor.fetchone()['count']
+                cursor.execute('SELECT COUNT(*) as count FROM survey_questions')
+                question_count = cursor.fetchone()['count']
 
                 results['summary'] = {
                     'database_type': 'PostgreSQL',
