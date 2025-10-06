@@ -3892,27 +3892,35 @@ def api_recreate_survey_tables():
         cursor.execute('''
             CREATE TABLE survey_questions (
                 id SERIAL PRIMARY KEY,
-                survey_id INTEGER,
-                question_key VARCHAR(255),
+                survey_id INTEGER NOT NULL,
+                question_key TEXT NOT NULL,
                 question_text TEXT,
-                question_type VARCHAR(50) DEFAULT 'text',
+                question_type TEXT DEFAULT 'text',
                 question_order INTEGER,
                 is_required BOOLEAN DEFAULT FALSE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (survey_id) REFERENCES surveys (id)
+                FOREIGN KEY (survey_id) REFERENCES surveys (id),
+                UNIQUE(survey_id, question_key)
             )
         ''')
 
         cursor.execute('''
             CREATE TABLE respondents (
                 id SERIAL PRIMARY KEY,
-                respondent_id VARCHAR(255) UNIQUE NOT NULL,
-                email VARCHAR(255),
-                name VARCHAR(255),
-                organization VARCHAR(255),
+                respondent_hash TEXT UNIQUE NOT NULL,
+                browser TEXT,
+                device TEXT,
+                ip_address TEXT,
+                user_agent TEXT,
+                first_response_date TIMESTAMP,
+                last_response_date TIMESTAMP,
+                total_responses INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_respondents_hash ON respondents(respondent_hash)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_respondents_first_response ON respondents(first_response_date)')
 
         cursor.execute('''
             CREATE TABLE survey_responses (
@@ -3920,12 +3928,13 @@ def api_recreate_survey_tables():
                 survey_id INTEGER NOT NULL,
                 respondent_id INTEGER NOT NULL,
                 response_date TIMESTAMP NOT NULL,
-                completion_status VARCHAR(50) DEFAULT 'complete',
+                completion_status TEXT DEFAULT 'complete',
                 response_duration_seconds INTEGER,
                 source_row_id INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (survey_id) REFERENCES surveys (id),
-                FOREIGN KEY (respondent_id) REFERENCES respondents (id)
+                FOREIGN KEY (respondent_id) REFERENCES respondents (id),
+                FOREIGN KEY (source_row_id) REFERENCES raw_data (id)
             )
         ''')
 
@@ -3935,10 +3944,14 @@ def api_recreate_survey_tables():
                 response_id INTEGER NOT NULL,
                 question_id INTEGER NOT NULL,
                 answer_text TEXT,
-                answer_value NUMERIC,
+                answer_numeric REAL,
+                answer_boolean BOOLEAN,
+                answer_date TIMESTAMP,
+                is_empty BOOLEAN DEFAULT FALSE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (response_id) REFERENCES survey_responses (id),
-                FOREIGN KEY (question_id) REFERENCES survey_questions (id)
+                FOREIGN KEY (question_id) REFERENCES survey_questions (id),
+                UNIQUE(response_id, question_id)
             )
         ''')
 
