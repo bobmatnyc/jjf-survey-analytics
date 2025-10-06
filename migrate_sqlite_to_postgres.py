@@ -59,11 +59,18 @@ def migrate_data():
     print(f"🐘 Connecting to PostgreSQL...")
     try:
         pg_conn = psycopg2.connect(database_url)
+        pg_conn.autocommit = False  # Use explicit transactions
         pg_cursor = pg_conn.cursor()
         print("✅ Connected to PostgreSQL")
     except Exception as e:
         print(f"❌ Failed to connect to PostgreSQL: {e}")
         sys.exit(1)
+
+    # Define boolean columns for type casting
+    boolean_columns = {
+        'survey_questions': ['is_required'],
+        'survey_answers': ['answer_boolean', 'is_empty']
+    }
 
     total_migrated = 0
 
@@ -87,6 +94,8 @@ def migrate_data():
                     print(f"    ⚠️  No data in {table}")
                     continue
 
+                print(f"    📊 Source rows: {row_count}")
+
                 # Get all data from SQLite
                 sqlite_cursor.execute(f"SELECT * FROM {table}")
                 rows = sqlite_cursor.fetchall()
@@ -97,15 +106,26 @@ def migrate_data():
                 # Get column names
                 columns = [desc[0] for desc in sqlite_cursor.description]
 
-                # Clear existing data in PostgreSQL table
+                # Clear existing data in PostgreSQL table using TRUNCATE CASCADE
                 try:
-                    pg_cursor.execute(f"DELETE FROM {table}")
+                    pg_cursor.execute(f"TRUNCATE TABLE {table} CASCADE")
                     pg_conn.commit()
+                    print(f"    🗑️  Cleared existing data from {table}")
                 except Exception as e:
-                    print(f"    ⚠️  Could not clear table (may not exist): {e}")
+                    print(f"    ⚠️  Could not truncate table: {e}")
+                    # Try DELETE as fallback
+                    try:
+                        pg_cursor.execute(f"DELETE FROM {table}")
+                        pg_conn.commit()
+                        print(f"    🗑️  Deleted existing data from {table}")
+                    except Exception as e2:
+                        print(f"    ⚠️  Could not clear table (may not exist): {e2}")
+                        pg_conn.rollback()
 
                 # Insert data into PostgreSQL
                 migrated_count = 0
+                error_count = 0
+
                 for row in rows:
                     # Convert row to dict
                     row_dict = dict(row)
@@ -113,13 +133,20 @@ def migrate_data():
                     # Build INSERT statement
                     placeholders = ', '.join(['%s'] * len(columns))
                     columns_str = ', '.join([f'"{col}"' for col in columns])
-                    values = [row_dict[col] for col in columns]
 
-                    # Replace None with NULL and handle special types
+                    # Process values with boolean casting
                     processed_values = []
-                    for val in values:
+                    for i, col in enumerate(columns):
+                        val = row_dict[col]
+
+                        # Handle None/NULL values
                         if val is None:
                             processed_values.append(None)
+                        # Cast SQLite INTEGER booleans to PostgreSQL BOOLEAN
+                        elif table in boolean_columns and col in boolean_columns[table]:
+                            # SQLite stores booleans as INTEGER (0/1)
+                            processed_values.append(bool(val) if val is not None else False)
+                        # Preserve datetime objects
                         elif isinstance(val, datetime):
                             processed_values.append(val)
                         else:
@@ -132,13 +159,23 @@ def migrate_data():
                         )
                         migrated_count += 1
                     except Exception as e:
-                        print(f"    ⚠️  Error inserting row: {e}")
-                        # Continue with next row
+                        error_count += 1
+                        if error_count <= 3:  # Only show first 3 errors
+                            print(f"    ⚠️  Error inserting row {migrated_count + error_count}: {e}")
+                        # Continue with next row instead of failing completely
+                        pg_conn.rollback()
                         continue
 
-                pg_conn.commit()
-                print(f"    ✅ Migrated {migrated_count} rows")
-                total_migrated += migrated_count
+                # Commit after each table to prevent full rollback
+                try:
+                    pg_conn.commit()
+                    print(f"    ✅ Migrated {migrated_count} rows")
+                    if error_count > 0:
+                        print(f"    ⚠️  Skipped {error_count} rows due to errors")
+                    total_migrated += migrated_count
+                except Exception as e:
+                    print(f"    ❌ Error committing table {table}: {e}")
+                    pg_conn.rollback()
 
             sqlite_conn.close()
 
@@ -146,31 +183,46 @@ def migrate_data():
             print(f"  ❌ Error migrating {db_path}: {e}")
             import traceback
             traceback.print_exc()
+            pg_conn.rollback()
 
     # Verify migration
     print(f"\n🔍 Verifying migration...")
+    verification_tables = [
+        'spreadsheets', 'raw_data', 'extraction_jobs',
+        'surveys', 'survey_questions', 'respondents',
+        'survey_responses', 'survey_answers'
+    ]
+
     try:
+        for table in verification_tables:
+            try:
+                pg_cursor.execute(f"SELECT COUNT(*) FROM {table}")
+                count = pg_cursor.fetchone()[0]
+                if count > 0:
+                    print(f"  ✅ {table}: {count} rows")
+                else:
+                    print(f"  ⚠️  {table}: 0 rows")
+            except Exception as e:
+                print(f"  ❌ {table}: Error - {e}")
+
+        # Check critical tables
         pg_cursor.execute("SELECT COUNT(*) FROM surveys")
         surveys_count = pg_cursor.fetchone()[0]
 
         pg_cursor.execute("SELECT COUNT(*) FROM survey_responses")
         responses_count = pg_cursor.fetchone()[0]
 
-        pg_cursor.execute("SELECT COUNT(*) FROM survey_answers")
-        answers_count = pg_cursor.fetchone()[0]
-
-        print(f"  ✅ Surveys: {surveys_count}")
-        print(f"  ✅ Responses: {responses_count}")
-        print(f"  ✅ Answers: {answers_count}")
-
         if surveys_count > 0 and responses_count > 0:
             print("\n🎉 Migration completed successfully!")
             print(f"📊 Total rows migrated: {total_migrated}")
         else:
             print("\n⚠️  Migration completed but no survey data found")
+            print(f"📊 Total rows migrated: {total_migrated}")
 
     except Exception as e:
         print(f"  ❌ Verification error: {e}")
+        import traceback
+        traceback.print_exc()
 
     finally:
         pg_conn.close()
