@@ -77,26 +77,74 @@ def create_database_tables():
         with sqlite3.connect(survey_db) as conn:
             cursor = conn.cursor()
             
-            # Create surveys table
+            # Create surveys table (matching survey_normalized.db schema)
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS surveys (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    title TEXT NOT NULL,
+                    survey_name TEXT NOT NULL,
+                    survey_type TEXT NOT NULL,
+                    spreadsheet_id TEXT NOT NULL,
                     description TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    status TEXT DEFAULT 'active'
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(spreadsheet_id)
                 )
             ''')
-            
+
+            # Create survey_questions table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS survey_questions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    survey_id INTEGER NOT NULL,
+                    question_key TEXT NOT NULL,
+                    question_text TEXT,
+                    question_type TEXT DEFAULT 'text',
+                    question_order INTEGER,
+                    is_required BOOLEAN DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (survey_id) REFERENCES surveys (id)
+                )
+            ''')
+
+            # Create respondents table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS respondents (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    respondent_id TEXT UNIQUE NOT NULL,
+                    email TEXT,
+                    name TEXT,
+                    organization TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+
             # Create survey_responses table
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS survey_responses (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    survey_id INTEGER,
-                    respondent_id TEXT,
-                    response_data TEXT,
-                    submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (survey_id) REFERENCES surveys (id)
+                    survey_id INTEGER NOT NULL,
+                    respondent_id INTEGER NOT NULL,
+                    response_date TIMESTAMP NOT NULL,
+                    completion_status TEXT DEFAULT 'complete',
+                    response_duration_seconds INTEGER,
+                    source_row_id INTEGER,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (survey_id) REFERENCES surveys (id),
+                    FOREIGN KEY (respondent_id) REFERENCES respondents (id)
+                )
+            ''')
+
+            # Create survey_answers table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS survey_answers (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    response_id INTEGER NOT NULL,
+                    question_id INTEGER NOT NULL,
+                    answer_text TEXT,
+                    answer_value REAL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (response_id) REFERENCES survey_responses (id),
+                    FOREIGN KEY (question_id) REFERENCES survey_questions (id)
                 )
             ''')
             
@@ -169,7 +217,7 @@ def verify_database():
     
     databases = [
         ('surveyor_data_improved.db', ['spreadsheets', 'raw_data', 'extraction_jobs']),
-        ('survey_normalized.db', ['surveys', 'survey_responses'])
+        ('survey_normalized.db', ['surveys', 'survey_questions', 'respondents', 'survey_responses', 'survey_answers'])
     ]
     
     for db_path, expected_tables in databases:
