@@ -4,6 +4,8 @@ Improved Google Sheets Data Extractor
 
 Updated version that properly handles all the Google Sheets URLs
 and extracts data using multiple methods.
+
+Supports both SQLite (local) and PostgreSQL (production) via DATABASE_URL.
 """
 
 import sqlite3
@@ -16,16 +18,29 @@ import os
 from datetime import datetime
 from typing import List, Dict, Any
 import time
+import logging
+from db_utils import DatabaseConnection, adapt_sql_for_postgresql, get_placeholder, is_postgresql
+
+logger = logging.getLogger(__name__)
 
 
 class ImprovedExtractor:
     """Improved data extractor for Google Sheets."""
-    
+
     def __init__(self, db_path: str = "surveyor_data_improved.db"):
         self.db_path = db_path
+        self.db_connection = DatabaseConnection(db_path)
+        self.use_postgresql = is_postgresql()
+        self.placeholder = get_placeholder()
+
+        if self.use_postgresql:
+            logger.info("Extractor using PostgreSQL database")
+        else:
+            logger.info(f"Extractor using SQLite database: {db_path}")
+
         self.sheet_urls = [
             "https://docs.google.com/spreadsheets/d/1h9AooI-E70v36EOxuErh4uYBg2TLbsF7X5kXdkrUkoQ/edit?usp=sharing",
-            "https://docs.google.com/spreadsheets/d/1qEHKDVIO4YTR3TjMt336HdKLIBMV2cebAcvdbGOUdCU/edit?usp=sharing", 
+            "https://docs.google.com/spreadsheets/d/1qEHKDVIO4YTR3TjMt336HdKLIBMV2cebAcvdbGOUdCU/edit?usp=sharing",
             "https://docs.google.com/spreadsheets/d/1fAAXXGOiDWc8lMVaRwqvuM2CDNAyNY_Px3usyisGhaw/edit?usp=sharing",
             "https://docs.google.com/spreadsheets/d/1-aw7gjjvRMQj89lstVBtKDZ67Cs-dO1SHNsp4scJ4II/edit?usp=sharing",
             "https://docs.google.com/spreadsheets/d/1mQxcZ9U1UsVmHstgWdbHuT7bqfVXV4ZNCr9pn0TlVWM/edit?usp=sharing",
@@ -134,12 +149,12 @@ class ImprovedExtractor:
         return f"Spreadsheet_{spreadsheet_id}"
     
     def create_database(self):
-        """Create SQLite database with improved schema."""
-        conn = sqlite3.connect(self.db_path)
+        """Create database with improved schema (PostgreSQL or SQLite)."""
+        conn = self.db_connection.get_connection()
         cursor = conn.cursor()
-        
-        # Create tables
-        cursor.execute('''
+
+        # Spreadsheets table
+        schema_sql = adapt_sql_for_postgresql('''
             CREATE TABLE IF NOT EXISTS spreadsheets (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 spreadsheet_id TEXT UNIQUE NOT NULL,
@@ -150,8 +165,10 @@ class ImprovedExtractor:
                 last_synced TIMESTAMP
             )
         ''')
-        
-        cursor.execute('''
+        cursor.execute(schema_sql)
+
+        # Raw data table
+        schema_sql = adapt_sql_for_postgresql('''
             CREATE TABLE IF NOT EXISTS raw_data (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 spreadsheet_id TEXT NOT NULL,
@@ -162,8 +179,10 @@ class ImprovedExtractor:
                 FOREIGN KEY (spreadsheet_id) REFERENCES spreadsheets (spreadsheet_id)
             )
         ''')
-        
-        cursor.execute('''
+        cursor.execute(schema_sql)
+
+        # Extraction jobs table
+        schema_sql = adapt_sql_for_postgresql('''
             CREATE TABLE IF NOT EXISTS extraction_jobs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 job_name TEXT NOT NULL,
@@ -178,26 +197,38 @@ class ImprovedExtractor:
                 error_message TEXT
             )
         ''')
-        
+        cursor.execute(schema_sql)
+
         # Create indexes
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_raw_data_spreadsheet ON raw_data(spreadsheet_id)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_spreadsheets_id ON spreadsheets(spreadsheet_id)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_raw_data_hash ON raw_data(data_hash)')
-        
+
         conn.commit()
         conn.close()
-        print(f"✅ Database created: {self.db_path}")
+
+        db_type = "PostgreSQL" if self.use_postgresql else f"SQLite ({self.db_path})"
+        print(f"✅ Database created: {db_type}")
     
     def save_spreadsheet_info(self, spreadsheet_id: str, url: str, title: str, sheet_type: str = None):
         """Save spreadsheet information to database."""
-        conn = sqlite3.connect(self.db_path)
+        conn = self.db_connection.get_connection()
         cursor = conn.cursor()
-        
-        cursor.execute('''
-            INSERT OR REPLACE INTO spreadsheets (spreadsheet_id, url, title, sheet_type, last_synced)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (spreadsheet_id, url, title, sheet_type, datetime.now()))
-        
+
+        # PostgreSQL uses ON CONFLICT, SQLite uses INSERT OR REPLACE
+        if self.use_postgresql:
+            cursor.execute('''
+                INSERT INTO spreadsheets (spreadsheet_id, url, title, sheet_type, last_synced)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (spreadsheet_id) DO UPDATE
+                SET url = EXCLUDED.url, title = EXCLUDED.title, sheet_type = EXCLUDED.sheet_type, last_synced = EXCLUDED.last_synced
+            ''', (spreadsheet_id, url, title, sheet_type, datetime.now()))
+        else:
+            cursor.execute('''
+                INSERT OR REPLACE INTO spreadsheets (spreadsheet_id, url, title, sheet_type, last_synced)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (spreadsheet_id, url, title, sheet_type, datetime.now()))
+
         conn.commit()
         conn.close()
     
@@ -205,64 +236,83 @@ class ImprovedExtractor:
         """Save raw data to database with deduplication."""
         if not data:
             return
-        
-        conn = sqlite3.connect(self.db_path)
+
+        conn = self.db_connection.get_connection()
         cursor = conn.cursor()
-        
+
         # Clear existing data for this spreadsheet
-        cursor.execute('DELETE FROM raw_data WHERE spreadsheet_id = ?', (spreadsheet_id,))
-        
+        if self.use_postgresql:
+            cursor.execute('DELETE FROM raw_data WHERE spreadsheet_id = %s', (spreadsheet_id,))
+        else:
+            cursor.execute('DELETE FROM raw_data WHERE spreadsheet_id = ?', (spreadsheet_id,))
+
         # Insert new data with hashing for deduplication
+        import hashlib
         for i, row in enumerate(data, 1):
             # Create hash for deduplication
-            import hashlib
             data_str = json.dumps(row, sort_keys=True)
             data_hash = hashlib.sha256(data_str.encode()).hexdigest()
-            
-            cursor.execute('''
-                INSERT INTO raw_data (spreadsheet_id, row_number, data_json, data_hash)
-                VALUES (?, ?, ?, ?)
-            ''', (spreadsheet_id, i, data_str, data_hash))
-        
+
+            if self.use_postgresql:
+                cursor.execute('''
+                    INSERT INTO raw_data (spreadsheet_id, row_number, data_json, data_hash)
+                    VALUES (%s, %s, %s, %s)
+                ''', (spreadsheet_id, i, data_str, data_hash))
+            else:
+                cursor.execute('''
+                    INSERT INTO raw_data (spreadsheet_id, row_number, data_json, data_hash)
+                    VALUES (?, ?, ?, ?)
+                ''', (spreadsheet_id, i, data_str, data_hash))
+
         conn.commit()
         conn.close()
         print(f"💾 Saved {len(data)} rows for spreadsheet {spreadsheet_id}")
     
     def create_extraction_job(self, job_name: str) -> int:
         """Create a new extraction job and return its ID."""
-        conn = sqlite3.connect(self.db_path)
+        conn = self.db_connection.get_connection()
         cursor = conn.cursor()
-        
-        cursor.execute('''
-            INSERT INTO extraction_jobs (job_name, total_spreadsheets)
-            VALUES (?, ?)
-        ''', (job_name, len(self.sheet_urls)))
-        
-        job_id = cursor.lastrowid
+
+        if self.use_postgresql:
+            cursor.execute('''
+                INSERT INTO extraction_jobs (job_name, total_spreadsheets)
+                VALUES (%s, %s)
+                RETURNING id
+            ''', (job_name, len(self.sheet_urls)))
+            job_id = cursor.fetchone()['id']
+        else:
+            cursor.execute('''
+                INSERT INTO extraction_jobs (job_name, total_spreadsheets)
+                VALUES (?, ?)
+            ''', (job_name, len(self.sheet_urls)))
+            job_id = cursor.lastrowid
+
         conn.commit()
         conn.close()
         return job_id
     
     def update_extraction_job(self, job_id: int, **kwargs):
         """Update extraction job progress."""
-        conn = sqlite3.connect(self.db_path)
+        conn = self.db_connection.get_connection()
         cursor = conn.cursor()
-        
+
         set_clauses = []
         values = []
-        
+
+        placeholder = '%s' if self.use_postgresql else '?'
+
         for key, value in kwargs.items():
-            set_clauses.append(f"{key} = ?")
+            set_clauses.append(f"{key} = {placeholder}")
             values.append(value)
-        
+
         if set_clauses:
             values.append(job_id)
             cursor.execute(f'''
-                UPDATE extraction_jobs 
+                UPDATE extraction_jobs
                 SET {", ".join(set_clauses)}
-                WHERE id = ?
+                WHERE id = {placeholder}
             ''', values)
-        
+
         conn.commit()
         conn.close()
     
@@ -367,11 +417,11 @@ class ImprovedExtractor:
     
     def show_database_info(self):
         """Show information about the database contents."""
-        if not os.path.exists(self.db_path):
+        if not self.use_postgresql and not os.path.exists(self.db_path):
             print(f"❌ Database not found: {self.db_path}")
             return
-        
-        conn = sqlite3.connect(self.db_path)
+
+        conn = self.db_connection.get_connection()
         cursor = conn.cursor()
         
         print(f"\n📊 Database Information: {self.db_path}")

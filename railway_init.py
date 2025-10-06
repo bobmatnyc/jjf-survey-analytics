@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 """
 Railway initialization script
-Runs database initialization when the app starts on Railway
+
+Runs database initialization and data sync when the app starts on Railway.
+This ensures PostgreSQL is populated from Google Sheets on every deployment.
 """
 
 import os
 import sys
 import logging
+import subprocess
+import time
+import sqlite3
 from init_database import create_database_tables, add_sample_data, verify_database
 
 # Configure logging for Railway
@@ -17,12 +22,103 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+def sync_data_from_google_sheets():
+    """
+    Extract data from Google Sheets and normalize to PostgreSQL.
+    This makes PostgreSQL a disposable cache that auto-regenerates.
+    """
+    logger.info("=" * 60)
+    logger.info("📊 AUTOMATIC DATA SYNC FROM GOOGLE SHEETS")
+    logger.info("=" * 60)
+
+    # Check if DATABASE_URL is set (indicates PostgreSQL)
+    database_url = os.getenv('DATABASE_URL')
+    if not database_url:
+        logger.info("⚠️  No DATABASE_URL found - skipping automatic sync")
+        logger.info("   (Local development uses manual extraction)")
+        return True
+
+    logger.info("🐘 PostgreSQL detected - running automatic data sync")
+
+    try:
+        # Step 1: Extract data from Google Sheets
+        logger.info("📥 Step 1/2: Extracting data from Google Sheets...")
+        logger.info("   Source: 6 predefined JJF Technology Assessment spreadsheets")
+
+        start_time = time.time()
+        result = subprocess.run(
+            [sys.executable, 'improved_extractor.py'],
+            capture_output=True,
+            text=True,
+            timeout=300  # 5 minute timeout
+        )
+
+        if result.returncode != 0:
+            logger.error(f"❌ Extraction failed with code {result.returncode}")
+            logger.error(f"   stdout: {result.stdout}")
+            logger.error(f"   stderr: {result.stderr}")
+            # Continue anyway - app can start with empty or partial data
+            return False
+
+        extraction_time = time.time() - start_time
+        logger.info(f"✅ Extraction completed in {extraction_time:.1f} seconds")
+        if result.stdout:
+            # Log last few lines of output
+            output_lines = result.stdout.strip().split('\n')
+            for line in output_lines[-5:]:
+                logger.info(f"   {line}")
+
+        # Step 2: Normalize data to PostgreSQL
+        logger.info("🔄 Step 2/2: Normalizing data to PostgreSQL...")
+
+        start_time = time.time()
+        result = subprocess.run(
+            [sys.executable, 'survey_normalizer.py', '--auto'],
+            capture_output=True,
+            text=True,
+            timeout=300  # 5 minute timeout
+        )
+
+        if result.returncode != 0:
+            logger.error(f"❌ Normalization failed with code {result.returncode}")
+            logger.error(f"   stdout: {result.stdout}")
+            logger.error(f"   stderr: {result.stderr}")
+            # Continue anyway - app can start with raw data only
+            return False
+
+        normalization_time = time.time() - start_time
+        logger.info(f"✅ Normalization completed in {normalization_time:.1f} seconds")
+        if result.stdout:
+            # Log last few lines of output
+            output_lines = result.stdout.strip().split('\n')
+            for line in output_lines[-5:]:
+                logger.info(f"   {line}")
+
+        total_time = extraction_time + normalization_time
+        logger.info("=" * 60)
+        logger.info(f"🎉 AUTOMATIC DATA SYNC COMPLETED in {total_time:.1f} seconds")
+        logger.info("   PostgreSQL is now populated from Google Sheets")
+        logger.info("   Google Sheets remains the single source of truth")
+        logger.info("=" * 60)
+
+        return True
+
+    except subprocess.TimeoutExpired:
+        logger.error("❌ Data sync timed out after 5 minutes")
+        logger.error("   App will start with empty database")
+        return False
+    except Exception as e:
+        logger.error(f"❌ Data sync failed: {e}")
+        logger.error("   App will start with empty database")
+        return False
+
+
 def railway_database_init():
     """Initialize database for Railway deployment."""
-    
+
     logger.info("🚂 Railway Database Initialization")
     logger.info("=" * 40)
-    
+
     # Check if we're running on Railway
     railway_env = os.getenv('RAILWAY_ENVIRONMENT')
     if railway_env:
@@ -115,9 +211,17 @@ def railway_database_init():
             logger.error(f"❌ Data import error: {e}")
             # Continue anyway - the app should still work with sample data
 
+        # NEW: Automatic data sync from Google Sheets (PostgreSQL only)
+        logger.info("")
+        sync_success = sync_data_from_google_sheets()
+        if not sync_success:
+            logger.warning("⚠️  Automatic data sync failed or was skipped")
+            logger.warning("   App will continue with existing data")
+
+        logger.info("")
         logger.info("🎉 Railway database initialization complete!")
         return True
-        
+
     except Exception as e:
         logger.error(f"❌ Railway database initialization failed: {e}")
         import traceback

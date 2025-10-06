@@ -21,6 +21,7 @@ This platform is designed to:
 - 🔐 **Authentication** - Secure access with password protection
 - 📱 **Responsive Design** - Beautiful Tailwind CSS interface for all devices
 - 🚀 **Production Ready** - Deployable to Railway with PostgreSQL support
+- 🔒 **Single Source of Truth** - Google Sheets as authoritative data source, databases as disposable caches
 
 ## 🚀 Quick Start
 

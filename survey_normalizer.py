@@ -4,6 +4,8 @@ Survey Database Normalizer
 
 Creates a normalized relational database structure from the raw Google Sheets data
 for proper survey analysis and statistical reporting.
+
+Supports both SQLite (local) and PostgreSQL (production) via DATABASE_URL.
 """
 
 import sqlite3
@@ -13,32 +15,50 @@ import os
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 import hashlib
+import logging
+from db_utils import DatabaseConnection, adapt_sql_for_postgresql, get_placeholder, is_postgresql
+
+logger = logging.getLogger(__name__)
 
 
 class SurveyNormalizer:
     """Normalizes raw survey data into a proper relational structure."""
-    
+
     def __init__(self, source_db: str = "surveyor_data_improved.db", target_db: str = "survey_normalized.db"):
         self.source_db = source_db
         self.target_db = target_db
         self.auto_import = True
+
+        # Database connections
+        self.source_db_connection = DatabaseConnection(source_db)
+        self.target_db_connection = DatabaseConnection(target_db)
+        self.use_postgresql = is_postgresql()
+        self.placeholder = get_placeholder()
+
+        if self.use_postgresql:
+            logger.info("Normalizer using PostgreSQL database")
+        else:
+            logger.info(f"Normalizer using SQLite databases: source={source_db}, target={target_db}")
     
     def create_normalized_schema(self):
         """Create the normalized database schema for surveys."""
-        conn = sqlite3.connect(self.target_db)
+        conn = self.target_db_connection.get_connection()
         cursor = conn.cursor()
-        
-        # Drop existing tables if they exist
+
+        # Drop existing tables if they exist (reverse order due to foreign keys)
         tables_to_drop = [
-            'survey_responses', 'survey_answers', 'survey_questions', 
-            'surveys', 'respondents', 'normalization_jobs'
+            'survey_answers', 'survey_responses', 'survey_questions',
+            'surveys', 'respondents', 'normalization_jobs', 'sync_tracking'
         ]
-        
+
         for table in tables_to_drop:
-            cursor.execute(f'DROP TABLE IF EXISTS {table}')
+            if self.use_postgresql:
+                cursor.execute(f'DROP TABLE IF EXISTS {table} CASCADE')
+            else:
+                cursor.execute(f'DROP TABLE IF EXISTS {table}')
         
         # Create surveys table
-        cursor.execute('''
+        cursor.execute(adapt_sql_for_postgresql('''
             CREATE TABLE surveys (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 survey_name TEXT NOT NULL,
@@ -49,10 +69,10 @@ class SurveyNormalizer:
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(spreadsheet_id)
             )
-        ''')
-        
+        '''))
+
         # Create survey questions table
-        cursor.execute('''
+        cursor.execute(adapt_sql_for_postgresql('''
             CREATE TABLE survey_questions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 survey_id INTEGER NOT NULL,
@@ -65,10 +85,10 @@ class SurveyNormalizer:
                 FOREIGN KEY (survey_id) REFERENCES surveys (id),
                 UNIQUE(survey_id, question_key)
             )
-        ''')
-        
+        '''))
+
         # Create respondents table
-        cursor.execute('''
+        cursor.execute(adapt_sql_for_postgresql('''
             CREATE TABLE respondents (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 respondent_hash TEXT UNIQUE NOT NULL,
@@ -81,10 +101,10 @@ class SurveyNormalizer:
                 total_responses INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-        ''')
-        
+        '''))
+
         # Create survey responses table
-        cursor.execute('''
+        cursor.execute(adapt_sql_for_postgresql('''
             CREATE TABLE survey_responses (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 survey_id INTEGER NOT NULL,
@@ -95,13 +115,12 @@ class SurveyNormalizer:
                 source_row_id INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (survey_id) REFERENCES surveys (id),
-                FOREIGN KEY (respondent_id) REFERENCES respondents (id),
-                FOREIGN KEY (source_row_id) REFERENCES raw_data (id)
+                FOREIGN KEY (respondent_id) REFERENCES respondents (id)
             )
-        ''')
-        
+        '''))
+
         # Create survey answers table
-        cursor.execute('''
+        cursor.execute(adapt_sql_for_postgresql('''
             CREATE TABLE survey_answers (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 response_id INTEGER NOT NULL,
@@ -116,10 +135,10 @@ class SurveyNormalizer:
                 FOREIGN KEY (question_id) REFERENCES survey_questions (id),
                 UNIQUE(response_id, question_id)
             )
-        ''')
-        
+        '''))
+
         # Create normalization jobs table
-        cursor.execute('''
+        cursor.execute(adapt_sql_for_postgresql('''
             CREATE TABLE normalization_jobs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 job_name TEXT NOT NULL,
@@ -132,10 +151,10 @@ class SurveyNormalizer:
                 completed_at TIMESTAMP,
                 error_message TEXT
             )
-        ''')
+        '''))
 
         # Create sync tracking table
-        cursor.execute('''
+        cursor.execute(adapt_sql_for_postgresql('''
             CREATE TABLE sync_tracking (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 spreadsheet_id TEXT UNIQUE NOT NULL,
@@ -146,7 +165,7 @@ class SurveyNormalizer:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-        ''')
+        '''))
         
         # Create indexes for performance
         indexes = [
@@ -165,11 +184,13 @@ class SurveyNormalizer:
         
         conn.commit()
         conn.close()
-        print(f"✅ Created normalized database schema: {self.target_db}")
-    
+
+        db_type = "PostgreSQL" if self.use_postgresql else f"SQLite ({self.target_db})"
+        print(f"✅ Created normalized database schema: {db_type}")
+
     def identify_survey_types(self) -> Dict[str, str]:
         """Identify which spreadsheets contain survey data vs. question definitions."""
-        conn = sqlite3.connect(self.source_db)
+        conn = self.source_db_connection.get_connection()
         cursor = conn.cursor()
         
         cursor.execute('''
@@ -184,27 +205,39 @@ class SurveyNormalizer:
         
         for sheet_id, title, sheet_type, row_count in spreadsheets:
             # Analyze the data to determine if it's responses or questions
-            cursor.execute('''
-                SELECT data_json FROM raw_data 
-                WHERE spreadsheet_id = ? 
-                LIMIT 3
-            ''', (sheet_id,))
-            
+            # Use placeholder for parameterized query
+            if self.use_postgresql:
+                cursor.execute('''
+                    SELECT data_json FROM raw_data
+                    WHERE spreadsheet_id = %s
+                    LIMIT 3
+                ''', (sheet_id,))
+            else:
+                cursor.execute('''
+                    SELECT data_json FROM raw_data
+                    WHERE spreadsheet_id = ?
+                    LIMIT 3
+                ''', (sheet_id,))
+
             sample_rows = cursor.fetchall()
-            
+
             if sample_rows:
                 # Check if this looks like response data or question data
-                sample_data = json.loads(sample_rows[0][0])
-                
+                # Extract JSON from row (handling dict vs tuple)
+                if isinstance(sample_rows[0], dict):
+                    sample_data = json.loads(sample_rows[0]['data_json'])
+                else:
+                    sample_data = json.loads(sample_rows[0][0])
+
                 # Look for response indicators
                 response_indicators = ['Date', 'Browser', 'Device', 'Timestamp']
                 question_indicators = ['Question', 'Answer', 'Option', 'Choice']
-                
-                response_score = sum(1 for key in sample_data.keys() 
+
+                response_score = sum(1 for key in sample_data.keys()
                                    if any(indicator in key for indicator in response_indicators))
-                question_score = sum(1 for key in sample_data.keys() 
+                question_score = sum(1 for key in sample_data.keys()
                                    if any(indicator in key for indicator in question_indicators))
-                
+
                 if response_score > question_score:
                     survey_types[sheet_id] = 'responses'
                 elif 'Links' in title or 'Answer Sheet' in title:
@@ -213,7 +246,7 @@ class SurveyNormalizer:
                     survey_types[sheet_id] = 'responses'  # Default assumption
             else:
                 survey_types[sheet_id] = 'unknown'
-        
+
         conn.close()
         return survey_types
     
@@ -254,17 +287,17 @@ class SurveyNormalizer:
     def check_for_new_data(self) -> Dict[str, Any]:
         """Check for new or updated data in the source database."""
         # Ensure target database exists with proper schema
-        if not os.path.exists(self.target_db):
+        if not self.use_postgresql and not os.path.exists(self.target_db):
             self.create_normalized_schema()
 
-        source_conn = sqlite3.connect(self.source_db)
+        source_conn = self.source_db_connection.get_connection()
         source_cursor = source_conn.cursor()
 
-        target_conn = sqlite3.connect(self.target_db)
+        target_conn = self.target_db_connection.get_connection()
         target_cursor = target_conn.cursor()
 
         # Ensure sync_tracking table exists
-        target_cursor.execute('''
+        target_cursor.execute(adapt_sql_for_postgresql('''
             CREATE TABLE IF NOT EXISTS sync_tracking (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 spreadsheet_id TEXT UNIQUE NOT NULL,
@@ -275,7 +308,7 @@ class SurveyNormalizer:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-        ''')
+        '''))
 
         # Get current state from source
         source_cursor.execute('''

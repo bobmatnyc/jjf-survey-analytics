@@ -371,6 +371,38 @@ railway run pg_dump > backup.sql
 railway run psql < backup.sql
 ```
 
+#### PostgreSQL as Disposable Cache
+
+**IMPORTANT:** PostgreSQL is automatically regenerated from Google Sheets on every Railway deployment.
+
+**Automatic Regeneration Process:**
+1. Railway detects `DATABASE_URL` environment variable
+2. `railway_init.py` runs on startup
+3. `improved_extractor.py` extracts from Google Sheets → PostgreSQL
+4. `survey_normalizer.py` normalizes data → PostgreSQL
+5. Application starts with fresh data
+
+**This means:**
+- You can safely delete the PostgreSQL database
+- No manual data migration needed
+- Google Sheets remain authoritative source
+- Auto-sync keeps data fresh (5-minute intervals)
+
+**Manual Regeneration (if needed):**
+```bash
+# Trigger via Railway CLI
+railway run python improved_extractor.py
+railway run python survey_normalizer.py --auto
+
+# Or restart service (automatic regeneration)
+railway restart
+```
+
+**Data Sync Behavior:**
+- **On Deploy:** Full extraction from Google Sheets
+- **Auto-Sync:** Monitors for changes, re-normalizes
+- **Manual Sync:** Via `/sync` dashboard "Force Sync" button
+
 ## Troubleshooting
 
 ### Local Deployment Issues

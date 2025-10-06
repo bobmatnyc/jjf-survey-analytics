@@ -304,6 +304,106 @@ normalization_jobs
 
 ---
 
+## 🔒 Data Architecture: Single Source of Truth
+
+### Google Sheets as Single Source of Truth
+
+**CRITICAL PRINCIPLE:** Google Sheets are the ONLY authoritative data source. All databases are disposable caches.
+
+#### Architecture Rules
+
+1. ✅ **Google Sheets → Databases** (One-way data flow)
+2. ❌ **Databases → Google Sheets** (NO reverse flow)
+3. ✅ **Databases can be deleted safely** (Data lives in Google Sheets)
+4. ✅ **Databases regenerate automatically** (From Google Sheets)
+
+#### Data Flow Architecture
+
+```
+Google Sheets (SINGLE SOURCE OF TRUTH)
+        ↓ READ-ONLY
+improved_extractor.py (Extract)
+        ↓
+Raw Database (DISPOSABLE CACHE)
+├─ SQLite: surveyor_data_improved.db (local)
+└─ PostgreSQL: Raw tables (production)
+        ↓
+survey_normalizer.py (Normalize)
+        ↓
+Normalized Database (DISPOSABLE CACHE)
+├─ SQLite: survey_normalized.db (local)
+└─ PostgreSQL: Normalized tables (production)
+        ↓
+Flask Application (app.py)
+        ↓
+User Interface (READ-ONLY)
+```
+
+#### Database Regeneration
+
+**Local Development (SQLite):**
+```bash
+# Safe to delete - data lives in Google Sheets
+rm surveyor_data_improved.db survey_normalized.db
+
+# Regenerate from Google Sheets (takes ~60 seconds)
+python improved_extractor.py
+python survey_normalizer.py --auto
+```
+
+**Production (PostgreSQL on Railway):**
+- **Automatic:** Railway deployment regenerates PostgreSQL from Google Sheets on startup
+- **Manual:** Restart Railway service to force full regeneration
+- **Emergency:** Delete PostgreSQL database - will regenerate on next deployment
+
+#### Database Environment Detection
+
+The system automatically detects the environment:
+
+- **`DATABASE_URL` NOT set** → SQLite mode (local development)
+  - Creates `.db` files in project directory
+  - Suitable for development and testing
+
+- **`DATABASE_URL` IS set** → PostgreSQL mode (production)
+  - Connects to PostgreSQL via DATABASE_URL
+  - Railway automatically sets this variable
+  - No `.db` files created
+
+#### SOT Compliance Guarantees
+
+✅ **Zero write operations to Google Sheets** - All code is read-only
+✅ **Databases are gitignored** - Not version controlled
+✅ **Full refresh on sync** - Not incremental updates
+✅ **Automatic regeneration** - Railway startup extracts from Sheets
+✅ **Manual regeneration** - Run extractor anytime
+
+#### What This Means for Development
+
+**You CAN safely:**
+- Delete any database file (`.db` or PostgreSQL)
+- Modify database schema without migrations
+- Experiment with database structure locally
+- Reset to clean state anytime
+
+**You CANNOT:**
+- Modify survey data without updating Google Sheets
+- Create "admin" features that edit database directly
+- Trust database as authoritative source
+- Rely on database data persisting across deployments
+
+#### Troubleshooting Data Issues
+
+**Problem:** Production data looks wrong
+**Solution:** Restart Railway service to regenerate from Google Sheets
+
+**Problem:** Local database is corrupted
+**Solution:** `rm *.db && python improved_extractor.py && python survey_normalizer.py --auto`
+
+**Problem:** Changes in Google Sheets not showing
+**Solution:** Wait for auto-sync (5 minutes) or force sync via `/sync` dashboard
+
+---
+
 ## 🌐 API Endpoints
 
 ### Web Routes (User Interface)
@@ -617,6 +717,7 @@ This project uses Claude MPM (Memory and Project Management) for knowledge reten
 - [DEVELOPER.md](DEVELOPER.md) - Technical architecture and development guide
 - [ARCHITECTURE.md](ARCHITECTURE.md) - System design and architecture
 - [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) - Deployment procedures
+- [SOT_ARCHITECTURE.md](SOT_ARCHITECTURE.md) - Single Source of Truth architecture
 
 ### Feature Documentation
 - [AUTO_SYNC_IMPLEMENTATION.md](AUTO_SYNC_IMPLEMENTATION.md) - Auto-sync service details

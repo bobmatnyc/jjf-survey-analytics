@@ -4,6 +4,8 @@ Auto-Sync Service for Survey Data
 
 Automatically detects and imports new spreadsheet data when changes are detected.
 Can be run as a standalone service or integrated into the Flask application.
+
+Supports both SQLite (local) and PostgreSQL (production) via DATABASE_URL.
 """
 
 import os
@@ -13,19 +15,28 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 from survey_normalizer import SurveyNormalizer
 import sqlite3
+import logging
+from db_utils import is_postgresql
+
+logger = logging.getLogger(__name__)
 
 
 class AutoSyncService:
     """Service for automatically syncing survey data."""
-    
-    def __init__(self, 
+
+    def __init__(self,
                  source_db: str = "surveyor_data_improved.db",
                  target_db: str = "survey_normalized.db",
                  check_interval: int = 300):  # 5 minutes default
         self.source_db = source_db
         self.target_db = target_db
         self.check_interval = check_interval
+        self.use_postgresql = is_postgresql()
+
+        # When using PostgreSQL, both source and target use the same database
+        # The normalizer will handle the database connections appropriately
         self.normalizer = SurveyNormalizer(source_db, target_db)
+
         self.running = False
         self.thread = None
         self.last_check = None
@@ -36,6 +47,9 @@ class AutoSyncService:
             'last_sync_time': None,
             'last_error': None
         }
+
+        db_type = "PostgreSQL" if self.use_postgresql else f"SQLite (source={source_db}, target={target_db})"
+        logger.info(f"AutoSyncService initialized with {db_type}")
     
     def start(self):
         """Start the auto-sync service."""
@@ -75,13 +89,14 @@ class AutoSyncService:
     def _perform_sync_check(self):
         """Perform a single sync check."""
         self.last_check = datetime.now()
-        
-        # Check if source database exists
-        if not os.path.exists(self.source_db):
+
+        # For SQLite, check if source database exists
+        if not self.use_postgresql and not os.path.exists(self.source_db):
+            logger.debug(f"Source database {self.source_db} does not exist, skipping sync")
             return
-        
-        # Ensure target database exists
-        if not os.path.exists(self.target_db):
+
+        # For SQLite, ensure target database exists
+        if not self.use_postgresql and not os.path.exists(self.target_db):
             print("📊 Creating normalized database structure...")
             self.normalizer.create_normalized_schema()
         
@@ -138,31 +153,43 @@ class AutoSyncService:
         """Get current sync status for dashboard display."""
         try:
             changes = self.normalizer.check_for_new_data()
-            
-            # Get sync tracking info
-            conn = sqlite3.connect(self.target_db)
+
+            # Get sync tracking info - use normalizer's target connection
+            conn = self.normalizer.target_db_connection.get_connection()
             cursor = conn.cursor()
-            
+
             cursor.execute('''
-                SELECT 
+                SELECT
                     COUNT(*) as total_tracked,
                     COUNT(CASE WHEN sync_status = 'completed' THEN 1 END) as completed,
                     COUNT(CASE WHEN sync_status = 'failed' THEN 1 END) as failed,
                     MAX(last_sync_timestamp) as last_sync
                 FROM sync_tracking
             ''')
-            
+
             tracking_stats = cursor.fetchone()
             conn.close()
-            
+
+            # Handle both dict (PostgreSQL) and tuple (SQLite) results
+            if isinstance(tracking_stats, dict):
+                total_tracked = tracking_stats.get('total_tracked', 0)
+                completed = tracking_stats.get('completed', 0)
+                failed = tracking_stats.get('failed', 0)
+                last_sync = tracking_stats.get('last_sync')
+            else:
+                total_tracked = tracking_stats[0] if tracking_stats else 0
+                completed = tracking_stats[1] if tracking_stats else 0
+                failed = tracking_stats[2] if tracking_stats else 0
+                last_sync = tracking_stats[3] if tracking_stats else None
+
             return {
                 'pending_changes': changes['total_changes'],
                 'new_spreadsheets': len(changes['new_data']),
                 'updated_spreadsheets': len(changes['updated_data']),
-                'total_tracked': tracking_stats[0] if tracking_stats else 0,
-                'completed_syncs': tracking_stats[1] if tracking_stats else 0,
-                'failed_syncs': tracking_stats[2] if tracking_stats else 0,
-                'last_sync': tracking_stats[3] if tracking_stats else None,
+                'total_tracked': total_tracked,
+                'completed_syncs': completed,
+                'failed_syncs': failed,
+                'last_sync': last_sync,
                 'service_stats': self.get_stats()
             }
             
