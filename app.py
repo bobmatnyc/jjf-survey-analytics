@@ -3441,12 +3441,14 @@ def debug_raw_data():
 def db_check():
     """Check database table counts for troubleshooting."""
     try:
+        import traceback
         with db.get_connection() as conn:
             cursor = conn.cursor()
 
             # Check all survey-related tables
             tables = ['surveys', 'survey_responses', 'survey_questions', 'survey_answers']
             counts = {}
+            errors = {}
 
             for table in tables:
                 try:
@@ -3454,23 +3456,30 @@ def db_check():
                     result = cursor.fetchone()
                     counts[table] = result[0] if result else 0
                 except Exception as e:
-                    counts[table] = f'Error: {str(e)}'
+                    counts[table] = 'ERROR'
+                    errors[table] = {
+                        'error_type': type(e).__name__,
+                        'error_message': str(e),
+                        'traceback': traceback.format_exc()
+                    }
                     # Also log table existence check
                     try:
-                        cursor.execute("""
-                            SELECT EXISTS (
-                                SELECT FROM information_schema.tables
-                                WHERE table_schema = 'public'
-                                AND table_name = %s
-                            )
-                        """, (table,))
-                        exists = cursor.fetchone()[0]
-                        counts[f'{table}_exists'] = exists
-                    except:
-                        pass
+                        if db.use_postgresql:
+                            cursor.execute("""
+                                SELECT EXISTS (
+                                    SELECT FROM information_schema.tables
+                                    WHERE table_schema = 'public'
+                                    AND table_name = %s
+                                )
+                            """, (table,))
+                            exists = cursor.fetchone()[0]
+                            errors[table]['table_exists'] = exists
+                    except Exception as e2:
+                        errors[table]['exists_check_error'] = str(e2)
 
             # Get sample survey data
             sample_surveys = []
+            sample_error = None
             try:
                 cursor.execute('''
                     SELECT id, survey_name, survey_type, created_at
@@ -3484,19 +3493,28 @@ def db_check():
                     else:
                         sample_surveys.append(dict(row))
             except Exception as e:
-                sample_surveys = [{'error': str(e)}]
+                sample_error = {
+                    'error_type': type(e).__name__,
+                    'error_message': str(e),
+                    'traceback': traceback.format_exc()
+                }
 
             return jsonify({
                 'status': 'success',
                 'database_type': 'PostgreSQL' if db.use_postgresql else 'SQLite',
                 'table_counts': counts,
+                'errors': errors if errors else None,
                 'sample_surveys': sample_surveys,
+                'sample_error': sample_error,
                 'timestamp': datetime.now().isoformat()
             })
 
     except Exception as e:
+        import traceback
         return jsonify({
             'error': str(e),
+            'error_type': type(e).__name__,
+            'traceback': traceback.format_exc(),
             'timestamp': datetime.now().isoformat()
         }), 500
 
