@@ -3863,7 +3863,8 @@ def api_recreate_survey_tables():
         return jsonify({'error': 'PostgreSQL not configured', 'status': 'failed'}), 400
 
     try:
-        conn = get_pg_connection()
+        import psycopg2
+        conn = psycopg2.connect(DATABASE_URL)
         cursor = conn.cursor()
 
         # Drop existing survey tables in correct order (children first)
