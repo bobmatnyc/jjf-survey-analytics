@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Survey Response Activity - Surveyor Data Viewer{% endblock %}
+{% block title %}Survey Submission Activity - Surveyor Data Viewer{% endblock %}
 
 {% block header %}
 <div class="mb-8">
@@ -8,7 +8,7 @@
         <div>
             <h1 class="text-3xl font-bold text-gray-900 mb-2">
                 <i class="fas fa-users text-survey-green mr-3"></i>
-                Survey Response Activity
+                Survey Submission Activity
             </h1>
             <p class="text-gray-600">Track when and who responded to surveys with detailed activity monitoring</p>
         </div>
@@ -41,7 +41,7 @@
                 </div>
             </div>
             <div class="ml-4">
-                <p class="text-sm font-medium text-gray-500">Total Responses</p>
+                <p class="text-sm font-medium text-gray-500">Total Submissions</p>
                 <p class="text-2xl font-bold text-gray-900">{{ activity|length }}</p>
             </div>
         </div>
@@ -105,12 +105,12 @@
     </div>
 </div>
 
-<!-- Response Timeline -->
+<!-- Submission Timeline -->
 <div class="bg-white rounded-lg shadow-md mb-8">
     <div class="px-6 py-4 border-b border-gray-200">
         <h3 class="text-lg font-semibold text-gray-900">
             <i class="fas fa-clock text-survey-blue mr-2"></i>
-            Response Timeline (Last {{ days }} days)
+            Submission Timeline (Last {{ days }} days)
         </h3>
     </div>
     <div class="p-6">
@@ -237,24 +237,24 @@
         </div>
     </div>
 
-    <!-- Response Patterns -->
+    <!-- Submission Patterns -->
     <div class="bg-white rounded-lg shadow-md">
         <div class="px-6 py-4 border-b border-gray-200">
             <h3 class="text-lg font-semibold text-gray-900">
                 <i class="fas fa-chart-bar text-survey-orange mr-2"></i>
-                Response Patterns
+                Submission Patterns
             </h3>
         </div>
         <div class="p-6">
-            <!-- Response Frequency -->
+            <!-- Submission Frequency -->
             <div class="mb-6">
-                <h4 class="font-medium text-gray-900 mb-4">Response Frequency</h4>
+                <h4 class="font-medium text-gray-900 mb-4">Submission Frequency</h4>
                 {% if respondent_analysis.response_frequency %}
                 <div class="space-y-3">
                     {% for freq in respondent_analysis.response_frequency %}
                     <div class="flex items-center justify-between">
                         <span class="text-sm text-gray-700">
-                            {{ freq.total_responses }} response{{ 's' if freq.total_responses != 1 else '' }}
+                            {{ freq.total_responses }} submission{{ 's' if freq.total_responses != 1 else '' }}
                         </span>
                         <div class="flex items-center space-x-3">
                             <span class="text-sm font-medium text-gray-900">{{ freq.respondent_count }} user{{ 's' if freq.respondent_count != 1 else '' }}</span>
@@ -315,7 +315,7 @@
     
     // Auto-refresh every 2 minutes for live activity
     setInterval(function() {
-        console.log('Auto-refreshing response activity...');
+        console.log('Auto-refreshing submission activity...');
         location.reload();
     }, 120000); // 2 minutes
 </script>

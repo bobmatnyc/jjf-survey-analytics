@@ -10,7 +10,7 @@
                 <i class="fas fa-chart-bar text-survey-blue mr-3"></i>
                 Detailed Survey Analytics
             </h1>
-            <p class="text-gray-600">In-depth analysis of survey questions, responses, and statistical insights</p>
+            <p class="text-gray-600">In-depth analysis of survey questions, submissions, and statistical insights</p>
         </div>
         <div class="flex space-x-3">
             <select id="surveyFilter" onchange="filterBySurvey(this.value)"
@@ -96,7 +96,7 @@
         </div>
     </div>
 
-    <!-- Unique Responses -->
+    <!-- Unique Submissions -->
     <div class="bg-white rounded-lg shadow-md p-6">
         <div class="flex items-center">
             <div class="flex-shrink-0">
@@ -105,7 +105,7 @@
                 </div>
             </div>
             <div class="ml-4">
-                <p class="text-sm font-medium text-gray-500">Unique Responses</p>
+                <p class="text-sm font-medium text-gray-500">Unique Submissions</p>
                 <p class="text-2xl font-bold text-gray-900">
                     {% if question_analytics %}
                         {{ (question_analytics|map(attribute='unique_answers')|sum) }}
@@ -239,14 +239,14 @@
     <div class="px-6 py-4 border-b border-gray-200">
         <h3 class="text-lg font-semibold text-gray-900">
             <i class="fas fa-chart-line text-survey-green mr-2"></i>
-            Response Trends (Last 30 Days)
+            Submission Trends (Last 30 Days)
         </h3>
     </div>
     <div class="p-6">
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <!-- Daily Responses Chart -->
+            <!-- Daily Submissions Chart -->
             <div>
-                <h4 class="font-medium text-gray-900 mb-4">Daily Response Volume</h4>
+                <h4 class="font-medium text-gray-900 mb-4">Daily Submission Volume</h4>
                 <div class="space-y-2">
                     {% for day in time_series.daily_responses[-14:] %}
                     <div class="flex items-center justify-between">
@@ -285,7 +285,7 @@
                         </div>
                         <div class="text-right">
                             <span class="text-sm font-bold text-gray-900">{{ total }}</span>
-                            <span class="text-xs text-gray-500 ml-1">responses</span>
+                            <span class="text-xs text-gray-500 ml-1">submissions</span>
                         </div>
                     </div>
                     {% endfor %}
@@ -330,7 +330,7 @@
                 </div>
                 <div class="text-right">
                     <div class="text-sm font-bold text-gray-900">{{ item.response_count }}</div>
-                    <div class="text-xs text-gray-500">responses</div>
+                    <div class="text-xs text-gray-500">submissions</div>
                 </div>
             </div>
             {% endfor %}

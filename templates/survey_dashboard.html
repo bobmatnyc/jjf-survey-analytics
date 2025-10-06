@@ -10,7 +10,7 @@
                 <i class="fas fa-chart-line text-survey-blue mr-3"></i>
                 Survey Analytics Dashboard
             </h1>
-            <p class="text-gray-600">Comprehensive analysis of normalized survey data and response patterns</p>
+            <p class="text-gray-600">Comprehensive analysis of normalized survey data and submission patterns</p>
         </div>
         <div class="flex space-x-3">
             <a href="{{ url_for('survey_analytics') }}" 
@@ -18,10 +18,10 @@
                 <i class="fas fa-chart-bar mr-2"></i>
                 Detailed Analytics
             </a>
-            <a href="{{ url_for('survey_responses') }}" 
+            <a href="{{ url_for('survey_responses') }}"
                class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors">
                 <i class="fas fa-users mr-2"></i>
-                Response Activity
+                Submission Activity
             </a>
         </div>
     </div>
@@ -55,7 +55,7 @@
                 </div>
             </div>
             <div class="ml-4">
-                <p class="text-sm font-medium text-gray-500">Total Responses</p>
+                <p class="text-sm font-medium text-gray-500">Total Submissions</p>
                 <p class="text-2xl font-bold text-gray-900">{{ overview.total_responses }}</p>
             </div>
         </div>
@@ -125,7 +125,7 @@
                     </div>
                     <div class="text-right">
                         <div class="text-lg font-bold text-gray-900">{{ survey.response_count }}</div>
-                        <div class="text-sm text-gray-500">responses</div>
+                        <div class="text-sm text-gray-500">submissions</div>
                     </div>
                 </div>
                 {% endfor %}
@@ -244,14 +244,14 @@
                 {% endif %}
             </div>
 
-            <!-- Response Frequency -->
+            <!-- Submission Frequency -->
             <div>
-                <h4 class="font-medium text-gray-900 mb-4">Response Frequency</h4>
+                <h4 class="font-medium text-gray-900 mb-4">Submission Frequency</h4>
                 {% if respondent_analysis.response_frequency %}
                 <div class="space-y-3">
                     {% for freq in respondent_analysis.response_frequency %}
                     <div class="flex justify-between items-center">
-                        <span class="text-sm text-gray-700">{{ freq.total_responses }} response{{ 's' if freq.total_responses != 1 else '' }}</span>
+                        <span class="text-sm text-gray-700">{{ freq.total_responses }} submission{{ 's' if freq.total_responses != 1 else '' }}</span>
                         <div class="flex items-center space-x-2">
                             <span class="text-sm font-medium text-gray-900">{{ freq.respondent_count }} user{{ 's' if freq.respondent_count != 1 else '' }}</span>
                             <div class="w-16 bg-gray-200 rounded-full h-2">
@@ -297,7 +297,7 @@
                     <i class="fas fa-users text-green-600"></i>
                 </div>
                 <div>
-                    <h4 class="font-medium text-gray-900">Response Activity</h4>
+                    <h4 class="font-medium text-gray-900">Submission Activity</h4>
                     <p class="text-sm text-gray-500">Who responded and when</p>
                 </div>
             </a>
