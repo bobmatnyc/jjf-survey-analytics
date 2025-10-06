@@ -997,10 +997,11 @@ def survey_dashboard():
                 with db.get_connection() as conn:
                     cursor = conn.cursor()
                     cursor.execute("""
-                        SELECT COUNT(*) FROM information_schema.tables
+                        SELECT COUNT(*) as count FROM information_schema.tables
                         WHERE table_schema = 'public' AND table_name = 'survey_questions'
                     """)
-                    table_exists = cursor.fetchone()[0] > 0
+                    result = cursor.fetchone()
+                    table_exists = result['count'] > 0 if result else False
 
                     if not table_exists:
                         return render_template('error.html',
@@ -1077,10 +1078,11 @@ def survey_analytics():
                 with db.get_connection() as conn:
                     cursor = conn.cursor()
                     cursor.execute("""
-                        SELECT COUNT(*) FROM information_schema.tables
+                        SELECT COUNT(*) as count FROM information_schema.tables
                         WHERE table_schema = 'public' AND table_name = 'survey_questions'
                     """)
-                    table_exists = cursor.fetchone()[0] > 0
+                    result = cursor.fetchone()
+                    table_exists = result['count'] > 0 if result else False
 
                     if not table_exists:
                         return render_template('error.html',
@@ -1131,10 +1133,11 @@ def survey_responses():
                 with db.get_connection() as conn:
                     cursor = conn.cursor()
                     cursor.execute("""
-                        SELECT COUNT(*) FROM information_schema.tables
+                        SELECT COUNT(*) as count FROM information_schema.tables
                         WHERE table_schema = 'public' AND table_name = 'survey_questions'
                     """)
-                    table_exists = cursor.fetchone()[0] > 0
+                    result = cursor.fetchone()
+                    table_exists = result['count'] > 0 if result else False
 
                     if not table_exists:
                         return render_template('error.html',
