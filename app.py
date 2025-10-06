@@ -3781,6 +3781,41 @@ def inject_now():
     """Inject current datetime into all templates."""
     return {'now': datetime.now()}
 
+@app.route('/api/migrate-sqlite-to-postgres', methods=['POST', 'GET'])
+def api_migrate_sqlite_to_postgres():
+    """Run SQLite to PostgreSQL migration for survey data."""
+    if not USE_POSTGRESQL:
+        return jsonify({'error': 'PostgreSQL not configured', 'status': 'failed'}), 400
+
+    try:
+        import subprocess
+        result = subprocess.run(
+            [sys.executable, 'migrate_sqlite_to_postgres.py'],
+            capture_output=True,
+            text=True,
+            timeout=300  # 5 minute timeout
+        )
+
+        return jsonify({
+            'status': 'completed' if result.returncode == 0 else 'failed',
+            'returncode': result.returncode,
+            'stdout': result.stdout,
+            'stderr': result.stderr,
+            'timestamp': datetime.now().isoformat()
+        })
+    except subprocess.TimeoutExpired:
+        return jsonify({
+            'error': 'Migration timed out after 5 minutes',
+            'status': 'timeout',
+            'timestamp': datetime.now().isoformat()
+        }), 500
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'status': 'error',
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
 if __name__ == '__main__':
     # Railway deployment logging
     logger.info("🚀 Starting JJF Survey Analytics application")
