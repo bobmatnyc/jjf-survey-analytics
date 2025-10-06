@@ -3856,6 +3856,109 @@ def inject_now():
     """Inject current datetime into all templates."""
     return {'now': datetime.now()}
 
+@app.route('/api/recreate-survey-tables', methods=['POST'])
+def api_recreate_survey_tables():
+    """Drop and recreate PostgreSQL survey tables with correct schema."""
+    if not USE_POSTGRESQL:
+        return jsonify({'error': 'PostgreSQL not configured', 'status': 'failed'}), 400
+
+    try:
+        conn = get_pg_connection()
+        cursor = conn.cursor()
+
+        # Drop existing survey tables in correct order (children first)
+        cursor.execute('DROP TABLE IF EXISTS survey_answers CASCADE')
+        cursor.execute('DROP TABLE IF EXISTS survey_responses CASCADE')
+        cursor.execute('DROP TABLE IF EXISTS survey_questions CASCADE')
+        cursor.execute('DROP TABLE IF EXISTS respondents CASCADE')
+        cursor.execute('DROP TABLE IF EXISTS surveys CASCADE')
+        conn.commit()
+
+        # Recreate tables with correct schema (matching SQLite normalized structure)
+        cursor.execute('''
+            CREATE TABLE surveys (
+                id SERIAL PRIMARY KEY,
+                survey_name VARCHAR(255) NOT NULL,
+                survey_type VARCHAR(100),
+                spreadsheet_id TEXT,
+                description TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(spreadsheet_id)
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE survey_questions (
+                id SERIAL PRIMARY KEY,
+                survey_id INTEGER,
+                question_key VARCHAR(255),
+                question_text TEXT,
+                question_type VARCHAR(50) DEFAULT 'text',
+                question_order INTEGER,
+                is_required BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (survey_id) REFERENCES surveys (id)
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE respondents (
+                id SERIAL PRIMARY KEY,
+                respondent_id VARCHAR(255) UNIQUE NOT NULL,
+                email VARCHAR(255),
+                name VARCHAR(255),
+                organization VARCHAR(255),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE survey_responses (
+                id SERIAL PRIMARY KEY,
+                survey_id INTEGER NOT NULL,
+                respondent_id INTEGER NOT NULL,
+                response_date TIMESTAMP NOT NULL,
+                completion_status VARCHAR(50) DEFAULT 'complete',
+                response_duration_seconds INTEGER,
+                source_row_id INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (survey_id) REFERENCES surveys (id),
+                FOREIGN KEY (respondent_id) REFERENCES respondents (id)
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE survey_answers (
+                id SERIAL PRIMARY KEY,
+                response_id INTEGER NOT NULL,
+                question_id INTEGER NOT NULL,
+                answer_text TEXT,
+                answer_value NUMERIC,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (response_id) REFERENCES survey_responses (id),
+                FOREIGN KEY (question_id) REFERENCES survey_questions (id)
+            )
+        ''')
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            'status': 'success',
+            'message': 'Survey tables recreated with correct schema',
+            'tables_recreated': ['surveys', 'survey_questions', 'respondents', 'survey_responses', 'survey_answers'],
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'status': 'failed',
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
 @app.route('/api/migrate-sqlite-to-postgres', methods=['POST', 'GET'])
 def api_migrate_sqlite_to_postgres():
     """Run SQLite to PostgreSQL migration for survey data."""
