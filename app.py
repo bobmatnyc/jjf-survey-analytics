@@ -3452,9 +3452,12 @@ def db_check():
 
             for table in tables:
                 try:
-                    cursor.execute(f'SELECT COUNT(*) FROM {table}')
+                    cursor.execute(f'SELECT COUNT(*) as count FROM {table}')
                     result = cursor.fetchone()
-                    counts[table] = result[0] if result else 0
+                    if db.use_postgresql:
+                        counts[table] = result['count'] if result else 0
+                    else:
+                        counts[table] = result[0] if result else 0
                 except Exception as e:
                     counts[table] = 'ERROR'
                     errors[table] = {
