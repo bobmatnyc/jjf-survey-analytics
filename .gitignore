@@ -166,11 +166,10 @@ cython_debug/
 .vscode/
 
 # Application specific
-# Temporarily allow .db files for Railway deployment
-#*.db
+*.db
 *.sqlite
 *.sqlite3
-#surveyor.db
+surveyor.db
 credentials.json
 token.json
 
