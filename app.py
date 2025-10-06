@@ -188,6 +188,8 @@ class DatabaseManager:
                     CREATE TABLE IF NOT EXISTS surveys (
                         id SERIAL PRIMARY KEY,
                         title VARCHAR(255) NOT NULL,
+                        survey_name VARCHAR(255),
+                        survey_type VARCHAR(100),
                         description TEXT,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         status VARCHAR(50) DEFAULT 'active'
@@ -212,6 +214,7 @@ class DatabaseManager:
                     CREATE TABLE IF NOT EXISTS survey_responses (
                         id SERIAL PRIMARY KEY,
                         survey_id INTEGER,
+                        respondent_id VARCHAR(255),
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         is_complete BOOLEAN DEFAULT FALSE,
                         completion_time_seconds INTEGER,
@@ -234,6 +237,54 @@ class DatabaseManager:
                         FOREIGN KEY (question_id) REFERENCES survey_questions (id)
                     )
                 ''')
+
+                # Create respondents table
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS respondents (
+                        id SERIAL PRIMARY KEY,
+                        respondent_hash VARCHAR(255) UNIQUE,
+                        browser VARCHAR(255),
+                        device VARCHAR(255),
+                        total_responses INTEGER DEFAULT 0,
+                        first_response_at TIMESTAMP,
+                        last_response_at TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+
+                # Migration: Add missing columns to existing tables if they don't exist
+                try:
+                    # Check if respondent_id column exists in survey_responses
+                    cursor.execute("""
+                        SELECT column_name
+                        FROM information_schema.columns
+                        WHERE table_name = 'survey_responses' AND column_name = 'respondent_id'
+                    """)
+                    if not cursor.fetchone():
+                        print("🔄 Adding missing respondent_id column to survey_responses...")
+                        cursor.execute("""
+                            ALTER TABLE survey_responses
+                            ADD COLUMN respondent_id VARCHAR(255)
+                        """)
+                        print("✅ Migration: respondent_id column added")
+
+                    # Check if survey_name column exists in surveys
+                    cursor.execute("""
+                        SELECT column_name
+                        FROM information_schema.columns
+                        WHERE table_name = 'surveys' AND column_name = 'survey_name'
+                    """)
+                    if not cursor.fetchone():
+                        print("🔄 Adding missing survey_name column to surveys...")
+                        cursor.execute("""
+                            ALTER TABLE surveys
+                            ADD COLUMN survey_name VARCHAR(255),
+                            ADD COLUMN survey_type VARCHAR(100)
+                        """)
+                        print("✅ Migration: survey_name and survey_type columns added")
+
+                except Exception as migration_error:
+                    print(f"⚠️ Migration warning: {migration_error}")
 
                 conn.commit()
                 print("✅ PostgreSQL tables initialized successfully")
@@ -805,7 +856,8 @@ if os.getenv('RAILWAY_ENVIRONMENT'):
 
 # Initialize database manager and analytics
 db = DatabaseManager()
-analytics = SurveyAnalytics(SURVEY_DB_PATH)
+# SurveyAnalytics will auto-detect PostgreSQL from DATABASE_URL environment variable
+analytics = SurveyAnalytics(db_path=SURVEY_DB_PATH, use_postgresql=USE_POSTGRESQL, database_url=DATABASE_URL)
 auto_sync = get_auto_sync_service()
 
 # Authentication routes
@@ -3376,6 +3428,55 @@ def debug_raw_data():
                 'total_raw_data_count': total_count,
                 'sample_raw_data': sample_data,
                 'joined_sample': joined_data,
+                'timestamp': datetime.now().isoformat()
+            })
+
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+@app.route('/api/db-check')
+def db_check():
+    """Check database table counts for troubleshooting."""
+    try:
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+
+            # Check all survey-related tables
+            tables = ['surveys', 'survey_responses', 'survey_questions', 'survey_answers']
+            counts = {}
+
+            for table in tables:
+                try:
+                    cursor.execute(f'SELECT COUNT(*) FROM {table}')
+                    counts[table] = cursor.fetchone()[0]
+                except Exception as e:
+                    counts[table] = f'Error: {str(e)}'
+
+            # Get sample survey data
+            sample_surveys = []
+            try:
+                cursor.execute('''
+                    SELECT id, survey_name, survey_type, created_at
+                    FROM surveys
+                    ORDER BY created_at DESC
+                    LIMIT 10
+                ''')
+                for row in cursor.fetchall():
+                    if db.use_postgresql:
+                        sample_surveys.append(dict(row))
+                    else:
+                        sample_surveys.append(dict(row))
+            except Exception as e:
+                sample_surveys = [{'error': str(e)}]
+
+            return jsonify({
+                'status': 'success',
+                'database_type': 'PostgreSQL' if db.use_postgresql else 'SQLite',
+                'table_counts': counts,
+                'sample_surveys': sample_surveys,
                 'timestamp': datetime.now().isoformat()
             })
 
