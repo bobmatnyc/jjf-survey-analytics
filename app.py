@@ -3973,6 +3973,54 @@ def api_recreate_survey_tables():
             'timestamp': datetime.now().isoformat()
         }), 500
 
+@app.route('/api/verify-survey-data', methods=['GET'])
+def api_verify_survey_data():
+    """Verify survey data in PostgreSQL."""
+    if not USE_POSTGRESQL:
+        return jsonify({'error': 'PostgreSQL not configured', 'status': 'failed'}), 400
+
+    try:
+        import psycopg2
+        conn = psycopg2.connect(DATABASE_URL)
+        cursor = conn.cursor()
+
+        # Get counts from all survey tables
+        tables = ['surveys', 'survey_questions', 'respondents', 'survey_responses', 'survey_answers']
+        counts = {}
+
+        for table in tables:
+            cursor.execute(f'SELECT COUNT(*) FROM {table}')
+            counts[table] = cursor.fetchone()[0]
+
+        # Get sample survey data
+        cursor.execute('SELECT id, survey_name, survey_type, spreadsheet_id FROM surveys LIMIT 5')
+        surveys = []
+        for row in cursor.fetchall():
+            surveys.append({
+                'id': row[0],
+                'survey_name': row[1],
+                'survey_type': row[2],
+                'spreadsheet_id': row[3]
+            })
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            'status': 'success',
+            'database_type': 'postgresql',
+            'table_counts': counts,
+            'sample_surveys': surveys,
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'status': 'failed',
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
 @app.route('/api/migrate-sqlite-to-postgres', methods=['POST', 'GET'])
 def api_migrate_sqlite_to_postgres():
     """Run SQLite to PostgreSQL migration for survey data."""
