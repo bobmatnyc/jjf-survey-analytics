@@ -151,23 +151,23 @@
             {% if completion_stats %}
             <div class="space-y-4">
                 {% for stat in completion_stats %}
-                <div class="border-l-4 pl-4 
-                    {% if stat.completion_percentage >= 80 %}border-green-500
-                    {% elif stat.completion_percentage >= 60 %}border-yellow-500
+                <div class="border-l-4 pl-4
+                    {% if stat.completion_percentage and stat.completion_percentage >= 80 %}border-green-500
+                    {% elif stat.completion_percentage and stat.completion_percentage >= 60 %}border-yellow-500
                     {% else %}border-red-500{% endif %}">
                     <div class="flex justify-between items-center mb-2">
                         <h4 class="font-medium text-gray-900">{{ stat.survey_name }}</h4>
-                        <span class="text-sm font-bold 
-                            {% if stat.completion_percentage >= 80 %}text-green-600
-                            {% elif stat.completion_percentage >= 60 %}text-yellow-600
+                        <span class="text-sm font-bold
+                            {% if stat.completion_percentage and stat.completion_percentage >= 80 %}text-green-600
+                            {% elif stat.completion_percentage and stat.completion_percentage >= 60 %}text-yellow-600
                             {% else %}text-red-600{% endif %}">
                             {{ stat.completion_percentage or 0 }}%
                         </span>
                     </div>
                     <div class="w-full bg-gray-200 rounded-full h-2">
-                        <div class="h-2 rounded-full 
-                            {% if stat.completion_percentage >= 80 %}bg-green-500
-                            {% elif stat.completion_percentage >= 60 %}bg-yellow-500
+                        <div class="h-2 rounded-full
+                            {% if stat.completion_percentage and stat.completion_percentage >= 80 %}bg-green-500
+                            {% elif stat.completion_percentage and stat.completion_percentage >= 60 %}bg-yellow-500
                             {% else %}bg-red-500{% endif %}" 
                              style="width: {{ stat.completion_percentage or 0 }}%"></div>
                     </div>
