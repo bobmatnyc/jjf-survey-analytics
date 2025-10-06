@@ -2242,10 +2242,10 @@ def init_survey_database():
 
             # Create survey database with required tables
             with sqlite3.connect(SURVEY_DB_PATH) as conn:
-            cursor = conn.cursor()
+                cursor = conn.cursor()
 
-            # Create surveys table
-            cursor.execute('''
+                # Create surveys table
+                cursor.execute('''
                 CREATE TABLE IF NOT EXISTS surveys (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     survey_name TEXT NOT NULL,
