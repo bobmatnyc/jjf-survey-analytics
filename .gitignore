@@ -238,3 +238,8 @@ tmp/
 virtualenv/
 yarn-debug.log*
 yarn-error.log*
+
+# Claude MPM artifacts (local development only)
+.claude-mpm/
+.claude/
+CLAUDE_MPM_INITIALIZATION_REPORT.md
