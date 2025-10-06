@@ -2229,16 +2229,19 @@ def init_survey_database():
                     'total_questions': question_count
                 }
 
+                results['status'] = 'completed'
+                return jsonify(results)
+
         else:
             results['steps'].append('Using SQLite for survey database')
             import sqlite3
 
-        # Check if survey database exists
-        survey_db_exists = os.path.exists(SURVEY_DB_PATH)
-        results['steps'].append(f"Survey DB exists: {survey_db_exists}")
+            # Check if survey database exists
+            survey_db_exists = os.path.exists(SURVEY_DB_PATH)
+            results['steps'].append(f"Survey DB exists: {survey_db_exists}")
 
-        # Create survey database with required tables
-        with sqlite3.connect(SURVEY_DB_PATH) as conn:
+            # Create survey database with required tables
+            with sqlite3.connect(SURVEY_DB_PATH) as conn:
             cursor = conn.cursor()
 
             # Create surveys table
