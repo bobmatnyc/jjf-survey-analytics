@@ -3451,9 +3451,23 @@ def db_check():
             for table in tables:
                 try:
                     cursor.execute(f'SELECT COUNT(*) FROM {table}')
-                    counts[table] = cursor.fetchone()[0]
+                    result = cursor.fetchone()
+                    counts[table] = result[0] if result else 0
                 except Exception as e:
                     counts[table] = f'Error: {str(e)}'
+                    # Also log table existence check
+                    try:
+                        cursor.execute("""
+                            SELECT EXISTS (
+                                SELECT FROM information_schema.tables
+                                WHERE table_schema = 'public'
+                                AND table_name = %s
+                            )
+                        """, (table,))
+                        exists = cursor.fetchone()[0]
+                        counts[f'{table}_exists'] = exists
+                    except:
+                        pass
 
             # Get sample survey data
             sample_surveys = []
