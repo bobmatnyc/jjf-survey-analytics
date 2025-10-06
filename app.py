@@ -187,12 +187,13 @@ class DatabaseManager:
                 cursor.execute('''
                     CREATE TABLE IF NOT EXISTS surveys (
                         id SERIAL PRIMARY KEY,
-                        title VARCHAR(255) NOT NULL,
-                        survey_name VARCHAR(255),
+                        survey_name VARCHAR(255) NOT NULL,
                         survey_type VARCHAR(100),
+                        spreadsheet_id TEXT,
                         description TEXT,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        status VARCHAR(50) DEFAULT 'active'
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(spreadsheet_id)
                     )
                 ''')
 
@@ -213,12 +214,15 @@ class DatabaseManager:
                 cursor.execute('''
                     CREATE TABLE IF NOT EXISTS survey_responses (
                         id SERIAL PRIMARY KEY,
-                        survey_id INTEGER,
-                        respondent_id VARCHAR(255),
+                        survey_id INTEGER NOT NULL,
+                        respondent_id INTEGER NOT NULL,
+                        response_date TIMESTAMP NOT NULL,
+                        completion_status VARCHAR(50) DEFAULT 'complete',
+                        response_duration_seconds INTEGER,
+                        source_row_id INTEGER,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        is_complete BOOLEAN DEFAULT FALSE,
-                        completion_time_seconds INTEGER,
-                        FOREIGN KEY (survey_id) REFERENCES surveys (id)
+                        FOREIGN KEY (survey_id) REFERENCES surveys (id),
+                        FOREIGN KEY (respondent_id) REFERENCES respondents (id)
                     )
                 ''')
 
@@ -242,46 +246,117 @@ class DatabaseManager:
                 cursor.execute('''
                     CREATE TABLE IF NOT EXISTS respondents (
                         id SERIAL PRIMARY KEY,
-                        respondent_hash VARCHAR(255) UNIQUE,
+                        respondent_hash VARCHAR(255) UNIQUE NOT NULL,
                         browser VARCHAR(255),
                         device VARCHAR(255),
+                        ip_address VARCHAR(50),
+                        user_agent TEXT,
+                        first_response_date TIMESTAMP,
+                        last_response_date TIMESTAMP,
                         total_responses INTEGER DEFAULT 0,
-                        first_response_at TIMESTAMP,
-                        last_response_at TIMESTAMP,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 ''')
 
                 # Migration: Add missing columns to existing tables if they don't exist
                 try:
-                    # Check if respondent_id column exists in survey_responses
+                    # Migrate surveys table
                     cursor.execute("""
                         SELECT column_name
                         FROM information_schema.columns
-                        WHERE table_name = 'survey_responses' AND column_name = 'respondent_id'
+                        WHERE table_name = 'surveys' AND column_name = 'spreadsheet_id'
                     """)
                     if not cursor.fetchone():
-                        print("🔄 Adding missing respondent_id column to survey_responses...")
-                        cursor.execute("""
-                            ALTER TABLE survey_responses
-                            ADD COLUMN respondent_id VARCHAR(255)
-                        """)
-                        print("✅ Migration: respondent_id column added")
-
-                    # Check if survey_name column exists in surveys
-                    cursor.execute("""
-                        SELECT column_name
-                        FROM information_schema.columns
-                        WHERE table_name = 'surveys' AND column_name = 'survey_name'
-                    """)
-                    if not cursor.fetchone():
-                        print("🔄 Adding missing survey_name column to surveys...")
+                        print("🔄 Migrating surveys table...")
                         cursor.execute("""
                             ALTER TABLE surveys
-                            ADD COLUMN survey_name VARCHAR(255),
-                            ADD COLUMN survey_type VARCHAR(100)
+                            ADD COLUMN IF NOT EXISTS spreadsheet_id TEXT,
+                            ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                         """)
-                        print("✅ Migration: survey_name and survey_type columns added")
+                        print("✅ Migration: spreadsheet_id and updated_at columns added to surveys")
+
+                    # Migrate survey_responses table
+                    cursor.execute("""
+                        SELECT column_name
+                        FROM information_schema.columns
+                        WHERE table_name = 'survey_responses' AND column_name = 'response_date'
+                    """)
+                    if not cursor.fetchone():
+                        print("🔄 Migrating survey_responses table...")
+                        # Add new columns
+                        cursor.execute("""
+                            ALTER TABLE survey_responses
+                            ADD COLUMN IF NOT EXISTS response_date TIMESTAMP,
+                            ADD COLUMN IF NOT EXISTS completion_status VARCHAR(50) DEFAULT 'complete',
+                            ADD COLUMN IF NOT EXISTS response_duration_seconds INTEGER,
+                            ADD COLUMN IF NOT EXISTS source_row_id INTEGER
+                        """)
+                        # Migrate data from old columns to new columns
+                        cursor.execute("""
+                            UPDATE survey_responses
+                            SET response_date = created_at,
+                                completion_status = CASE WHEN is_complete THEN 'complete' ELSE 'incomplete' END,
+                                response_duration_seconds = completion_time_seconds
+                            WHERE response_date IS NULL
+                        """)
+                        print("✅ Migration: response_date, completion_status, response_duration_seconds, source_row_id added to survey_responses")
+
+                    # Migrate respondents table
+                    cursor.execute("""
+                        SELECT column_name
+                        FROM information_schema.columns
+                        WHERE table_name = 'respondents' AND column_name = 'ip_address'
+                    """)
+                    if not cursor.fetchone():
+                        print("🔄 Migrating respondents table...")
+                        cursor.execute("""
+                            ALTER TABLE respondents
+                            ADD COLUMN IF NOT EXISTS ip_address VARCHAR(50),
+                            ADD COLUMN IF NOT EXISTS user_agent TEXT
+                        """)
+                        # Rename columns if needed
+                        cursor.execute("""
+                            SELECT column_name
+                            FROM information_schema.columns
+                            WHERE table_name = 'respondents' AND column_name = 'first_response_at'
+                        """)
+                        if cursor.fetchone():
+                            cursor.execute("""
+                                ALTER TABLE respondents
+                                RENAME COLUMN first_response_at TO first_response_date
+                            """)
+                            cursor.execute("""
+                                ALTER TABLE respondents
+                                RENAME COLUMN last_response_at TO last_response_date
+                            """)
+                        print("✅ Migration: ip_address, user_agent added; response date columns renamed")
+
+                    # Create indexes for performance
+                    cursor.execute("""
+                        CREATE INDEX IF NOT EXISTS idx_survey_responses_survey ON survey_responses(survey_id)
+                    """)
+                    cursor.execute("""
+                        CREATE INDEX IF NOT EXISTS idx_survey_responses_respondent ON survey_responses(respondent_id)
+                    """)
+                    cursor.execute("""
+                        CREATE INDEX IF NOT EXISTS idx_survey_responses_date ON survey_responses(response_date)
+                    """)
+                    cursor.execute("""
+                        CREATE INDEX IF NOT EXISTS idx_survey_questions_survey ON survey_questions(survey_id)
+                    """)
+                    cursor.execute("""
+                        CREATE INDEX IF NOT EXISTS idx_survey_answers_response ON survey_answers(response_id)
+                    """)
+                    cursor.execute("""
+                        CREATE INDEX IF NOT EXISTS idx_survey_answers_question ON survey_answers(question_id)
+                    """)
+                    cursor.execute("""
+                        CREATE INDEX IF NOT EXISTS idx_respondents_hash ON respondents(respondent_hash)
+                    """)
+                    cursor.execute("""
+                        CREATE INDEX IF NOT EXISTS idx_respondents_first_response ON respondents(first_response_date)
+                    """)
+                    print("✅ Migration: Performance indexes created")
 
                 except Exception as migration_error:
                     print(f"⚠️ Migration warning: {migration_error}")
