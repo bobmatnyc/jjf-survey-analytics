@@ -2176,13 +2176,24 @@ def init_survey_database():
                     db.init_postgresql_tables()
                     results['steps'].append('Created missing PostgreSQL survey tables')
 
+                # Update existing surveys to have survey_name and survey_type
+                cursor.execute('''
+                    UPDATE surveys
+                    SET survey_name = title,
+                        survey_type = 'General Survey'
+                    WHERE survey_name IS NULL OR survey_type IS NULL
+                ''')
+                updated_count = cursor.rowcount
+                if updated_count > 0:
+                    results['steps'].append(f'Updated {updated_count} surveys with missing names/types')
+
                 # Add sample survey data
                 cursor.execute('''
-                    INSERT INTO surveys (title, description, status)
-                    VALUES (%s, %s, %s)
+                    INSERT INTO surveys (title, survey_name, survey_type, description, status)
+                    VALUES (%s, %s, %s, %s, %s)
                     ON CONFLICT DO NOTHING
                     RETURNING id
-                ''', ('JJF Survey Collection', 'Combined survey and assessment questions', 'active'))
+                ''', ('JJF Survey Collection', 'JJF Survey Collection', 'General Survey', 'Combined survey and assessment questions', 'active'))
 
                 survey_result = cursor.fetchone()
                 if survey_result:
