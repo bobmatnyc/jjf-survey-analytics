@@ -35,6 +35,19 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
+@app.after_request
+def add_header(response):
+    """Add headers to prevent caching of dynamic content."""
+    # Don't cache dynamic content
+    if response.content_type and 'text/html' in response.content_type:
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+    # API responses should not be cached
+    elif response.content_type and 'application/json' in response.content_type:
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    return response
+
 # Configuration
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'surveyor-data-viewer-2025-default-key')
 
@@ -977,10 +990,29 @@ def api_stats():
 def survey_dashboard():
     """Survey analytics dashboard."""
     try:
-        # Check if normalized database exists
-        if not os.path.exists(SURVEY_DB_PATH):
-            return render_template('error.html',
-                                 error=f'Survey database not found at {SURVEY_DB_PATH}. <a href="/init-survey-db">Click here to initialize it</a>.'), 404
+        # Check database availability based on environment
+        if USE_POSTGRESQL:
+            # For PostgreSQL, check if tables exist
+            try:
+                with db.get_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        SELECT COUNT(*) FROM information_schema.tables
+                        WHERE table_schema = 'public' AND table_name = 'survey_questions'
+                    """)
+                    table_exists = cursor.fetchone()[0] > 0
+
+                    if not table_exists:
+                        return render_template('error.html',
+                            error='Survey database tables missing. <a href="/init-survey-db">Click here to initialize the database</a>.'), 404
+            except Exception as db_error:
+                return render_template('error.html',
+                    error=f'Survey database error: {db_error}. <a href="/init-survey-db">Click here to initialize the database</a>.'), 500
+        else:
+            # For SQLite, check if file exists
+            if not os.path.exists(SURVEY_DB_PATH):
+                return render_template('error.html',
+                                     error=f'Survey database not found at {SURVEY_DB_PATH}. <a href="/init-survey-db">Click here to initialize it</a>.'), 404
 
         # Check if analytics is available
         if not analytics:
@@ -1038,9 +1070,29 @@ def survey_dashboard():
 def survey_analytics():
     """Detailed survey analytics page."""
     try:
-        if not os.path.exists(SURVEY_DB_PATH):
-            return render_template('error.html',
-                                 error=f'Survey database not found. <a href="/init-survey-db">Initialize database</a>'), 404
+        # Check database availability based on environment
+        if USE_POSTGRESQL:
+            # For PostgreSQL, check if tables exist
+            try:
+                with db.get_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        SELECT COUNT(*) FROM information_schema.tables
+                        WHERE table_schema = 'public' AND table_name = 'survey_questions'
+                    """)
+                    table_exists = cursor.fetchone()[0] > 0
+
+                    if not table_exists:
+                        return render_template('error.html',
+                            error='Survey database tables missing. <a href="/init-survey-db">Initialize database</a>'), 404
+            except Exception as db_error:
+                return render_template('error.html',
+                    error=f'Survey database error: {db_error}. <a href="/init-survey-db">Initialize database</a>'), 500
+        else:
+            # For SQLite, check if file exists
+            if not os.path.exists(SURVEY_DB_PATH):
+                return render_template('error.html',
+                                     error=f'Survey database not found. <a href="/init-survey-db">Initialize database</a>'), 404
 
         if not analytics:
             return render_template('error.html',
@@ -1072,9 +1124,29 @@ def survey_analytics():
 def survey_responses():
     """Survey response activity dashboard."""
     try:
-        if not os.path.exists(SURVEY_DB_PATH):
-            return render_template('error.html',
-                                 error='Normalized survey database not found. Please run survey_normalizer.py first.'), 404
+        # Check database availability based on environment
+        if USE_POSTGRESQL:
+            # For PostgreSQL, check if tables exist
+            try:
+                with db.get_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        SELECT COUNT(*) FROM information_schema.tables
+                        WHERE table_schema = 'public' AND table_name = 'survey_questions'
+                    """)
+                    table_exists = cursor.fetchone()[0] > 0
+
+                    if not table_exists:
+                        return render_template('error.html',
+                            error='Survey database tables missing. <a href="/init-survey-db">Initialize database</a>'), 404
+            except Exception as db_error:
+                return render_template('error.html',
+                    error=f'Survey database error: {db_error}. <a href="/init-survey-db">Initialize database</a>'), 500
+        else:
+            # For SQLite, check if file exists
+            if not os.path.exists(SURVEY_DB_PATH):
+                return render_template('error.html',
+                                     error='Normalized survey database not found. Please run survey_normalizer.py first.'), 404
 
         days = request.args.get('days', 30, type=int)
         activity = analytics.get_response_activity(days)
