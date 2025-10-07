@@ -6,6 +6,7 @@ Provides unified database connection handling for both SQLite and PostgreSQL.
 
 import os
 import sqlite3
+import re
 from typing import Any, Optional
 import logging
 
@@ -106,11 +107,17 @@ def adapt_sql_for_postgresql(sql: str) -> str:
     if not USE_POSTGRESQL:
         return sql
 
-    # Replace AUTOINCREMENT with SERIAL
-    sql = sql.replace('INTEGER PRIMARY KEY AUTOINCREMENT', 'SERIAL PRIMARY KEY')
+    # Log original SQL for debugging
+    logger.debug(f"Adapting SQL: {sql[:100]}...")
 
-    # Replace TEXT with VARCHAR for consistency
-    # Note: PostgreSQL handles TEXT fine, but we keep it for compatibility
+    # Replace AUTOINCREMENT with SERIAL (handle all variations)
+    sql = sql.replace('INTEGER PRIMARY KEY AUTOINCREMENT', 'SERIAL PRIMARY KEY')
+    sql = sql.replace('INTEGER AUTOINCREMENT PRIMARY KEY', 'SERIAL PRIMARY KEY')
+
+    # Replace standalone AUTOINCREMENT in column definitions
+    # Match pattern: column_name INTEGER AUTOINCREMENT
+    import re
+    sql = re.sub(r'(\w+\s+)INTEGER\s+AUTOINCREMENT', r'\1SERIAL', sql, flags=re.IGNORECASE)
 
     # Replace DATETIME with TIMESTAMP
     sql = sql.replace('DATETIME', 'TIMESTAMP')
@@ -118,6 +125,54 @@ def adapt_sql_for_postgresql(sql: str) -> str:
     # Replace BOOLEAN 0/1 with TRUE/FALSE
     sql = sql.replace('BOOLEAN DEFAULT 0', 'BOOLEAN DEFAULT FALSE')
     sql = sql.replace('BOOLEAN DEFAULT 1', 'BOOLEAN DEFAULT TRUE')
+
+    # Replace DEFAULT CURRENT_TIMESTAMP (SQLite) with DEFAULT CURRENT_TIMESTAMP (PostgreSQL is same)
+    # But handle datetime('now') which is SQLite-specific
+    sql = sql.replace("datetime('now')", "CURRENT_TIMESTAMP")
+    sql = sql.replace("DATETIME('now')", "CURRENT_TIMESTAMP")
+
+    # Replace INSERT OR IGNORE with INSERT ... ON CONFLICT DO NOTHING
+    if 'INSERT OR IGNORE INTO' in sql:
+        # Extract table name and columns
+        match = re.search(r'INSERT OR IGNORE INTO\s+(\w+)\s*\(([^)]+)\)', sql, re.IGNORECASE)
+        if match:
+            table_name = match.group(1)
+            # For ON CONFLICT, we need to know the unique constraint
+            # For now, use DO NOTHING which works without specifying constraint
+            sql = sql.replace('INSERT OR IGNORE INTO', 'INSERT INTO')
+            # Add ON CONFLICT DO NOTHING at the end before any RETURNING clause
+            if 'RETURNING' in sql:
+                sql = sql.replace(' RETURNING', ' ON CONFLICT DO NOTHING RETURNING')
+            else:
+                sql = sql.rstrip(';').rstrip() + ' ON CONFLICT DO NOTHING'
+
+    # Replace INSERT OR REPLACE with INSERT ... ON CONFLICT DO UPDATE
+    if 'INSERT OR REPLACE INTO' in sql:
+        # Extract table name
+        match = re.search(r'INSERT OR REPLACE INTO\s+(\w+)\s*\(([^)]+)\)', sql, re.IGNORECASE)
+        if match:
+            table_name = match.group(1)
+            columns = [col.strip() for col in match.group(2).split(',')]
+
+            # PostgreSQL requires explicit conflict target
+            # We'll assume the first column or 'id' is the unique constraint
+            conflict_column = 'id' if 'id' in columns else columns[0]
+
+            # Build UPDATE clause for all columns except the conflict column
+            update_columns = [col for col in columns if col != conflict_column]
+            update_clause = ', '.join([f"{col} = EXCLUDED.{col}" for col in update_columns])
+
+            sql = sql.replace('INSERT OR REPLACE INTO', 'INSERT INTO')
+
+            if 'RETURNING' in sql:
+                # Insert ON CONFLICT before RETURNING
+                sql = sql.replace(' RETURNING',
+                    f' ON CONFLICT ({conflict_column}) DO UPDATE SET {update_clause} RETURNING')
+            else:
+                sql = sql.rstrip(';').rstrip() + f' ON CONFLICT ({conflict_column}) DO UPDATE SET {update_clause}'
+
+    # Log adapted SQL for debugging
+    logger.debug(f"Adapted SQL: {sql[:100]}...")
 
     return sql
 

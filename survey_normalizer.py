@@ -202,8 +202,16 @@ class SurveyNormalizer:
         
         spreadsheets = cursor.fetchall()
         survey_types = {}
-        
-        for sheet_id, title, sheet_type, row_count in spreadsheets:
+
+        for sheet in spreadsheets:
+            # Handle dict vs tuple result
+            if isinstance(sheet, dict):
+                sheet_id = sheet['spreadsheet_id']
+                title = sheet['title']
+                sheet_type = sheet['sheet_type']
+                row_count = sheet['row_count']
+            else:
+                sheet_id, title, sheet_type, row_count = sheet
             # Analyze the data to determine if it's responses or questions
             # Use placeholder for parameterized query
             if self.use_postgresql:
@@ -325,14 +333,32 @@ class SurveyNormalizer:
 
         source_data = source_cursor.fetchall()
 
-        # Get sync tracking state
+        # Get sync tracking state (handle dict vs tuple)
         target_cursor.execute('SELECT spreadsheet_id, last_sync_timestamp, row_count FROM sync_tracking')
-        sync_state = {row[0]: {'last_sync': row[1], 'row_count': row[2]} for row in target_cursor.fetchall()}
+        sync_rows = target_cursor.fetchall()
+        sync_state = {}
+        for row in sync_rows:
+            if isinstance(row, dict):
+                sync_state[row['spreadsheet_id']] = {
+                    'last_sync': row['last_sync_timestamp'],
+                    'row_count': row['row_count']
+                }
+            else:
+                sync_state[row[0]] = {'last_sync': row[1], 'row_count': row[2]}
 
         new_data = []
         updated_data = []
 
-        for sheet_id, title, sheet_type, last_synced, row_count in source_data:
+        for sheet in source_data:
+            # Handle dict vs tuple result
+            if isinstance(sheet, dict):
+                sheet_id = sheet['spreadsheet_id']
+                title = sheet['title']
+                sheet_type = sheet['sheet_type']
+                last_synced = sheet['last_synced']
+                row_count = sheet['current_row_count']
+            else:
+                sheet_id, title, sheet_type, last_synced, row_count = sheet
             if sheet_id not in sync_state:
                 # New spreadsheet
                 new_data.append({
@@ -411,25 +437,40 @@ class SurveyNormalizer:
 
     def import_single_spreadsheet(self, spreadsheet_id: str, update: bool = False):
         """Import or update a single spreadsheet."""
-        source_conn = sqlite3.connect(self.source_db)
+        source_conn = self.source_db_connection.get_connection()
         source_cursor = source_conn.cursor()
 
-        target_conn = sqlite3.connect(self.target_db)
+        target_conn = self.target_db_connection.get_connection()
         target_cursor = target_conn.cursor()
 
         try:
-            # Get spreadsheet info
-            source_cursor.execute('''
-                SELECT spreadsheet_id, title, sheet_type, url, last_synced
-                FROM spreadsheets
-                WHERE spreadsheet_id = ?
-            ''', (spreadsheet_id,))
+            # Get spreadsheet info (use proper placeholder for database type)
+            if self.use_postgresql:
+                source_cursor.execute('''
+                    SELECT spreadsheet_id, title, sheet_type, url, last_synced
+                    FROM spreadsheets
+                    WHERE spreadsheet_id = %s
+                ''', (spreadsheet_id,))
+            else:
+                source_cursor.execute('''
+                    SELECT spreadsheet_id, title, sheet_type, url, last_synced
+                    FROM spreadsheets
+                    WHERE spreadsheet_id = ?
+                ''', (spreadsheet_id,))
 
             sheet_info = source_cursor.fetchone()
             if not sheet_info:
                 raise ValueError(f"Spreadsheet {spreadsheet_id} not found in source database")
 
-            sheet_id, title, sheet_type, url, last_synced = sheet_info
+            # Handle dict vs tuple result
+            if isinstance(sheet_info, dict):
+                sheet_id = sheet_info['spreadsheet_id']
+                title = sheet_info['title']
+                sheet_type = sheet_info['sheet_type']
+                url = sheet_info['url']
+                last_synced = sheet_info['last_synced']
+            else:
+                sheet_id, title, sheet_type, url, last_synced = sheet_info
 
             # Determine survey type
             survey_types = self.identify_survey_types()
@@ -445,12 +486,14 @@ class SurveyNormalizer:
                     source_cursor, target_cursor, sheet_id, title, sheet_type
                 )
 
-                # Update sync tracking
-                target_cursor.execute('''
+                # Update sync tracking (adapt SQL for PostgreSQL)
+                sync_sql = adapt_sql_for_postgresql('''
                     INSERT OR REPLACE INTO sync_tracking
                     (spreadsheet_id, last_sync_timestamp, last_source_update, row_count, sync_status, updated_at)
-                    VALUES (?, ?, ?, ?, 'completed', ?)
-                ''', (
+                    VALUES ({}, {}, {}, {}, 'completed', {})
+                '''.format(*[self.placeholder]*5))
+
+                target_cursor.execute(sync_sql, (
                     spreadsheet_id,
                     datetime.now(),
                     last_synced,
@@ -465,12 +508,14 @@ class SurveyNormalizer:
                 print(f"    ⚠️  Skipping {title} (question definitions, not responses)")
 
         except Exception as e:
-            # Update sync tracking with error
-            target_cursor.execute('''
+            # Update sync tracking with error (adapt SQL for PostgreSQL)
+            error_sync_sql = adapt_sql_for_postgresql('''
                 INSERT OR REPLACE INTO sync_tracking
                 (spreadsheet_id, sync_status, updated_at)
-                VALUES (?, 'failed', ?)
-            ''', (spreadsheet_id, datetime.now()))
+                VALUES ({}, 'failed', {})
+            '''.format(self.placeholder, self.placeholder))
+
+            target_cursor.execute(error_sync_sql, (spreadsheet_id, datetime.now()))
             target_conn.commit()
             raise e
 
@@ -480,24 +525,44 @@ class SurveyNormalizer:
 
     def clear_spreadsheet_data(self, target_cursor, spreadsheet_id: str):
         """Clear existing data for a spreadsheet before re-importing."""
-        # Get survey ID
-        target_cursor.execute('SELECT id FROM surveys WHERE spreadsheet_id = ?', (spreadsheet_id,))
+        # Get survey ID (use proper placeholder)
+        if self.use_postgresql:
+            target_cursor.execute('SELECT id FROM surveys WHERE spreadsheet_id = %s', (spreadsheet_id,))
+        else:
+            target_cursor.execute('SELECT id FROM surveys WHERE spreadsheet_id = ?', (spreadsheet_id,))
+
         survey_result = target_cursor.fetchone()
 
         if survey_result:
-            survey_id = survey_result[0]
+            # Handle dict vs tuple result
+            if isinstance(survey_result, dict):
+                survey_id = survey_result['id']
+            else:
+                survey_id = survey_result[0]
 
-            # Delete in correct order due to foreign key constraints
-            target_cursor.execute('''
-                DELETE FROM survey_answers
-                WHERE response_id IN (
-                    SELECT id FROM survey_responses WHERE survey_id = ?
-                )
-            ''', (survey_id,))
+            # Delete in correct order due to foreign key constraints (use proper placeholder)
+            if self.use_postgresql:
+                target_cursor.execute('''
+                    DELETE FROM survey_answers
+                    WHERE response_id IN (
+                        SELECT id FROM survey_responses WHERE survey_id = %s
+                    )
+                ''', (survey_id,))
 
-            target_cursor.execute('DELETE FROM survey_responses WHERE survey_id = ?', (survey_id,))
-            target_cursor.execute('DELETE FROM survey_questions WHERE survey_id = ?', (survey_id,))
-            target_cursor.execute('DELETE FROM surveys WHERE id = ?', (survey_id,))
+                target_cursor.execute('DELETE FROM survey_responses WHERE survey_id = %s', (survey_id,))
+                target_cursor.execute('DELETE FROM survey_questions WHERE survey_id = %s', (survey_id,))
+                target_cursor.execute('DELETE FROM surveys WHERE id = %s', (survey_id,))
+            else:
+                target_cursor.execute('''
+                    DELETE FROM survey_answers
+                    WHERE response_id IN (
+                        SELECT id FROM survey_responses WHERE survey_id = ?
+                    )
+                ''', (survey_id,))
+
+                target_cursor.execute('DELETE FROM survey_responses WHERE survey_id = ?', (survey_id,))
+                target_cursor.execute('DELETE FROM survey_questions WHERE survey_id = ?', (survey_id,))
+                target_cursor.execute('DELETE FROM surveys WHERE id = ?', (survey_id,))
 
             print(f"    🗑️  Cleared existing data for re-import")
 
@@ -516,15 +581,25 @@ class SurveyNormalizer:
                 return auto_result
         
         # Create normalization job
-        target_conn = sqlite3.connect(self.target_db)
+        target_conn = self.target_db_connection.get_connection()
         target_cursor = target_conn.cursor()
-        
+
         job_name = f"normalization_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        target_cursor.execute('''
-            INSERT INTO normalization_jobs (job_name)
-            VALUES (?)
-        ''', (job_name,))
-        job_id = target_cursor.lastrowid
+
+        # Use proper placeholder and handle RETURNING for PostgreSQL
+        if self.use_postgresql:
+            target_cursor.execute('''
+                INSERT INTO normalization_jobs (job_name)
+                VALUES (%s) RETURNING id
+            ''', (job_name,))
+            job_id = target_cursor.fetchone()['id']
+        else:
+            target_cursor.execute('''
+                INSERT INTO normalization_jobs (job_name)
+                VALUES (?)
+            ''', (job_name,))
+            job_id = target_cursor.lastrowid
+
         target_conn.commit()
         
         try:
@@ -533,7 +608,7 @@ class SurveyNormalizer:
             print(f"📊 Identified survey types: {survey_types}")
             
             # Process each spreadsheet
-            source_conn = sqlite3.connect(self.source_db)
+            source_conn = self.source_db_connection.get_connection()
             source_cursor = source_conn.cursor()
             
             # Get all spreadsheets
@@ -610,49 +685,71 @@ class SurveyNormalizer:
             source_conn.close()
             target_conn.close()
     
-    def process_survey_responses(self, source_cursor, target_cursor, sheet_id: str, 
+    def process_survey_responses(self, source_cursor, target_cursor, sheet_id: str,
                                title: str, sheet_type: str) -> Dict[str, int]:
         """Process survey response data from a spreadsheet."""
-        
-        # Create or get survey record
-        target_cursor.execute('''
+
+        # Create or get survey record (adapt SQL for PostgreSQL)
+        insert_survey_sql = adapt_sql_for_postgresql('''
             INSERT OR IGNORE INTO surveys (survey_name, survey_type, spreadsheet_id, description)
-            VALUES (?, ?, ?, ?)
-        ''', (title, sheet_type, sheet_id, f"Survey data from {title}"))
+            VALUES ({}, {}, {}, {})
+        '''.format(*[self.placeholder]*4))
+
+        target_cursor.execute(insert_survey_sql, (title, sheet_type, sheet_id, f"Survey data from {title}"))
+
+        # Get survey ID (use proper placeholder)
+        if self.use_postgresql:
+            target_cursor.execute('''
+                SELECT id FROM surveys WHERE spreadsheet_id = %s
+            ''', (sheet_id,))
+            survey_id = target_cursor.fetchone()['id']
+        else:
+            target_cursor.execute('''
+                SELECT id FROM surveys WHERE spreadsheet_id = ?
+            ''', (sheet_id,))
+            survey_id = target_cursor.fetchone()[0]
         
-        target_cursor.execute('''
-            SELECT id FROM surveys WHERE spreadsheet_id = ?
-        ''', (sheet_id,))
-        survey_id = target_cursor.fetchone()[0]
-        
-        # Get all raw data for this spreadsheet
-        source_cursor.execute('''
-            SELECT id, row_number, data_json
-            FROM raw_data
-            WHERE spreadsheet_id = ?
-            ORDER BY row_number
-        ''', (sheet_id,))
+        # Get all raw data for this spreadsheet (use proper placeholder)
+        if self.use_postgresql:
+            source_cursor.execute('''
+                SELECT id, row_number, data_json
+                FROM raw_data
+                WHERE spreadsheet_id = %s
+                ORDER BY row_number
+            ''', (sheet_id,))
+        else:
+            source_cursor.execute('''
+                SELECT id, row_number, data_json
+                FROM raw_data
+                WHERE spreadsheet_id = ?
+                ORDER BY row_number
+            ''', (sheet_id,))
         
         raw_rows = source_cursor.fetchall()
-        
+
         if not raw_rows:
             return {'responses': 0, 'questions': 0, 'answers': 0}
-        
-        # Analyze first row to identify questions
-        first_row_data = json.loads(raw_rows[0][2])
+
+        # Analyze first row to identify questions (handle dict vs tuple)
+        if isinstance(raw_rows[0], dict):
+            first_row_data = json.loads(raw_rows[0]['data_json'])
+        else:
+            first_row_data = json.loads(raw_rows[0][2])
         question_keys = [key for key in first_row_data.keys() 
                         if not key.startswith('_') and key not in ['Date', 'Browser', 'Device']]
         
         questions_created = 0
         
-        # Create question records
+        # Create question records (adapt SQL for PostgreSQL)
         for i, question_key in enumerate(question_keys):
-            target_cursor.execute('''
-                INSERT OR IGNORE INTO survey_questions 
+            insert_question_sql = adapt_sql_for_postgresql('''
+                INSERT OR IGNORE INTO survey_questions
                 (survey_id, question_key, question_text, question_order)
-                VALUES (?, ?, ?, ?)
-            ''', (survey_id, question_key, question_key, i + 1))
-            
+                VALUES ({}, {}, {}, {})
+            '''.format(*[self.placeholder]*4))
+
+            target_cursor.execute(insert_question_sql, (survey_id, question_key, question_key, i + 1))
+
             if target_cursor.rowcount > 0:
                 questions_created += 1
         
@@ -660,66 +757,113 @@ class SurveyNormalizer:
         answers_created = 0
         
         # Process each response
-        for row_id, row_number, data_json in raw_rows:
+        for row in raw_rows:
             try:
+                # Handle dict vs tuple result
+                if isinstance(row, dict):
+                    row_id = row['id']
+                    row_number = row['row_number']
+                    data_json = row['data_json']
+                else:
+                    row_id, row_number, data_json = row
+
                 response_data = json.loads(data_json)
                 
-                # Create or get respondent
+                # Create or get respondent (adapt SQL for PostgreSQL)
                 respondent_hash = self.create_respondent_hash(response_data)
-                
-                target_cursor.execute('''
-                    INSERT OR IGNORE INTO respondents 
+
+                insert_respondent_sql = adapt_sql_for_postgresql('''
+                    INSERT OR IGNORE INTO respondents
                     (respondent_hash, browser, device, first_response_date, total_responses)
-                    VALUES (?, ?, ?, ?, 1)
-                ''', (
+                    VALUES ({}, {}, {}, {}, 1)
+                '''.format(*[self.placeholder]*4))
+
+                target_cursor.execute(insert_respondent_sql, (
                     respondent_hash,
                     response_data.get('Browser', ''),
                     response_data.get('Device', ''),
                     self.parse_response_date(response_data.get('Date', ''))
                 ))
+
+                # Update respondent stats (use proper placeholder)
+                if self.use_postgresql:
+                    target_cursor.execute('''
+                        UPDATE respondents
+                        SET last_response_date = %s,
+                            total_responses = total_responses + 1
+                        WHERE respondent_hash = %s
+                    ''', (self.parse_response_date(response_data.get('Date', '')), respondent_hash))
+                else:
+                    target_cursor.execute('''
+                        UPDATE respondents
+                        SET last_response_date = ?,
+                            total_responses = total_responses + 1
+                        WHERE respondent_hash = ?
+                    ''', (self.parse_response_date(response_data.get('Date', '')), respondent_hash))
+
+                # Get respondent ID (use proper placeholder)
+                if self.use_postgresql:
+                    target_cursor.execute('''
+                        SELECT id FROM respondents WHERE respondent_hash = %s
+                    ''', (respondent_hash,))
+                    respondent_id = target_cursor.fetchone()['id']
+                else:
+                    target_cursor.execute('''
+                        SELECT id FROM respondents WHERE respondent_hash = ?
+                    ''', (respondent_hash,))
+                    respondent_id = target_cursor.fetchone()[0]
                 
-                # Update respondent stats
-                target_cursor.execute('''
-                    UPDATE respondents 
-                    SET last_response_date = ?,
-                        total_responses = total_responses + 1
-                    WHERE respondent_hash = ?
-                ''', (self.parse_response_date(response_data.get('Date', '')), respondent_hash))
-                
-                # Get respondent ID
-                target_cursor.execute('''
-                    SELECT id FROM respondents WHERE respondent_hash = ?
-                ''', (respondent_hash,))
-                respondent_id = target_cursor.fetchone()[0]
-                
-                # Create response record
-                target_cursor.execute('''
-                    INSERT INTO survey_responses 
-                    (survey_id, respondent_id, response_date, source_row_id)
-                    VALUES (?, ?, ?, ?)
-                ''', (
-                    survey_id,
-                    respondent_id,
-                    self.parse_response_date(response_data.get('Date', '')),
-                    row_id
-                ))
-                
-                response_id = target_cursor.lastrowid
+                # Create response record (use proper placeholder and RETURNING)
+                if self.use_postgresql:
+                    target_cursor.execute('''
+                        INSERT INTO survey_responses
+                        (survey_id, respondent_id, response_date, source_row_id)
+                        VALUES (%s, %s, %s, %s) RETURNING id
+                    ''', (
+                        survey_id,
+                        respondent_id,
+                        self.parse_response_date(response_data.get('Date', '')),
+                        row_id
+                    ))
+                    response_id = target_cursor.fetchone()['id']
+                else:
+                    target_cursor.execute('''
+                        INSERT INTO survey_responses
+                        (survey_id, respondent_id, response_date, source_row_id)
+                        VALUES (?, ?, ?, ?)
+                    ''', (
+                        survey_id,
+                        respondent_id,
+                        self.parse_response_date(response_data.get('Date', '')),
+                        row_id
+                    ))
+                    response_id = target_cursor.lastrowid
+
                 responses_processed += 1
                 
                 # Create answer records
                 for question_key in question_keys:
-                    # Get question ID
-                    target_cursor.execute('''
-                        SELECT id FROM survey_questions 
-                        WHERE survey_id = ? AND question_key = ?
-                    ''', (survey_id, question_key))
-                    
+                    # Get question ID (use proper placeholder)
+                    if self.use_postgresql:
+                        target_cursor.execute('''
+                            SELECT id FROM survey_questions
+                            WHERE survey_id = %s AND question_key = %s
+                        ''', (survey_id, question_key))
+                    else:
+                        target_cursor.execute('''
+                            SELECT id FROM survey_questions
+                            WHERE survey_id = ? AND question_key = ?
+                        ''', (survey_id, question_key))
+
                     question_result = target_cursor.fetchone()
                     if not question_result:
                         continue
-                    
-                    question_id = question_result[0]
+
+                    # Handle dict vs tuple result
+                    if isinstance(question_result, dict):
+                        question_id = question_result['id']
+                    else:
+                        question_id = question_result[0]
                     answer_value = response_data.get(question_key, '')
                     
                     # Parse answer value
@@ -738,17 +882,29 @@ class SurveyNormalizer:
                     # Try to parse as boolean
                     if str(answer_value).lower() in ['true', 'false', 'yes', 'no', '1', '0']:
                         answer_boolean = str(answer_value).lower() in ['true', 'yes', '1']
-                    
-                    target_cursor.execute('''
-                        INSERT INTO survey_answers 
-                        (response_id, question_id, answer_text, answer_numeric, 
-                         answer_boolean, is_empty)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    ''', (
-                        response_id, question_id, answer_text, answer_numeric,
-                        answer_boolean, is_empty
-                    ))
-                    
+
+                    # Insert answer (use proper placeholder)
+                    if self.use_postgresql:
+                        target_cursor.execute('''
+                            INSERT INTO survey_answers
+                            (response_id, question_id, answer_text, answer_numeric,
+                             answer_boolean, is_empty)
+                            VALUES (%s, %s, %s, %s, %s, %s)
+                        ''', (
+                            response_id, question_id, answer_text, answer_numeric,
+                            answer_boolean, is_empty
+                        ))
+                    else:
+                        target_cursor.execute('''
+                            INSERT INTO survey_answers
+                            (response_id, question_id, answer_text, answer_numeric,
+                             answer_boolean, is_empty)
+                            VALUES (?, ?, ?, ?, ?, ?)
+                        ''', (
+                            response_id, question_id, answer_text, answer_numeric,
+                            answer_boolean, is_empty
+                        ))
+
                     answers_created += 1
                 
             except Exception as e:

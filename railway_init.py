@@ -55,8 +55,16 @@ def sync_data_from_google_sheets():
 
         if result.returncode != 0:
             logger.error(f"❌ Extraction failed with code {result.returncode}")
-            logger.error(f"   stdout: {result.stdout}")
-            logger.error(f"   stderr: {result.stderr}")
+            if result.stdout:
+                logger.error("   === STDOUT ===")
+                for line in result.stdout.split('\n'):
+                    if line.strip():
+                        logger.error(f"   {line}")
+            if result.stderr:
+                logger.error("   === STDERR ===")
+                for line in result.stderr.split('\n'):
+                    if line.strip():
+                        logger.error(f"   {line}")
             # Continue anyway - app can start with empty or partial data
             return False
 
@@ -81,8 +89,16 @@ def sync_data_from_google_sheets():
 
         if result.returncode != 0:
             logger.error(f"❌ Normalization failed with code {result.returncode}")
-            logger.error(f"   stdout: {result.stdout}")
-            logger.error(f"   stderr: {result.stderr}")
+            if result.stdout:
+                logger.error("   === STDOUT ===")
+                for line in result.stdout.split('\n'):
+                    if line.strip():
+                        logger.error(f"   {line}")
+            if result.stderr:
+                logger.error("   === STDERR ===")
+                for line in result.stderr.split('\n'):
+                    if line.strip():
+                        logger.error(f"   {line}")
             # Continue anyway - app can start with raw data only
             return False
 
