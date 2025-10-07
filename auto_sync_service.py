@@ -50,14 +50,43 @@ class AutoSyncService:
 
         db_type = "PostgreSQL" if self.use_postgresql else f"SQLite (source={source_db}, target={target_db})"
         logger.info(f"AutoSyncService initialized with {db_type}")
-    
+
+    def _ensure_schema_exists(self):
+        """Ensure database schema exists (create if missing)."""
+        if self.use_postgresql:
+            # For PostgreSQL, check if sync_tracking table exists
+            try:
+                conn = self.normalizer.target_db_connection.get_connection()
+                cursor = conn.cursor()
+                cursor.execute("SELECT 1 FROM sync_tracking LIMIT 1")
+                conn.close()
+                logger.info("✅ Database schema already exists")
+            except Exception as e:
+                # Table doesn't exist, create schema
+                logger.info("📊 Creating normalized database schema in PostgreSQL...")
+                print("📊 Creating normalized database structure...")
+                self.normalizer.create_normalized_schema()
+                logger.info("✅ Database schema created successfully")
+        elif not os.path.exists(self.target_db):
+            # For SQLite, check if file exists
+            logger.info("📊 Creating normalized database structure...")
+            print("📊 Creating normalized database structure...")
+            self.normalizer.create_normalized_schema()
+            logger.info("✅ Database schema created successfully")
+        else:
+            logger.info("✅ Database schema already exists")
+
     def start(self):
         """Start the auto-sync service."""
         if self.running:
             print("⚠️  Auto-sync service is already running")
             return
-        
+
         print(f"🚀 Starting auto-sync service (checking every {self.check_interval} seconds)")
+
+        # Ensure database schema exists before starting sync loop
+        self._ensure_schema_exists()
+
         self.running = True
         self.thread = threading.Thread(target=self._sync_loop, daemon=True)
         self.thread.start()
@@ -95,11 +124,24 @@ class AutoSyncService:
             logger.debug(f"Source database {self.source_db} does not exist, skipping sync")
             return
 
-        # For SQLite, ensure target database exists
-        if not self.use_postgresql and not os.path.exists(self.target_db):
+        # Ensure target database schema exists (both SQLite and PostgreSQL)
+        if self.use_postgresql:
+            # For PostgreSQL, check if sync_tracking table exists
+            try:
+                conn = self.normalizer.target_db_connection.get_connection()
+                cursor = conn.cursor()
+                cursor.execute("SELECT 1 FROM sync_tracking LIMIT 1")
+                conn.close()
+            except Exception as e:
+                # Table doesn't exist, create schema
+                logger.info("📊 Creating normalized database schema in PostgreSQL...")
+                print("📊 Creating normalized database structure...")
+                self.normalizer.create_normalized_schema()
+        elif not os.path.exists(self.target_db):
+            # For SQLite, check if file exists
             print("📊 Creating normalized database structure...")
             self.normalizer.create_normalized_schema()
-        
+
         try:
             # Check for new data
             changes = self.normalizer.check_for_new_data()
