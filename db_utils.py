@@ -148,21 +148,48 @@ def adapt_sql_for_postgresql(sql: str) -> str:
 
     # Replace INSERT OR REPLACE with INSERT ... ON CONFLICT DO UPDATE
     if 'INSERT OR REPLACE INTO' in sql:
-        # Extract table name
-        match = re.search(r'INSERT OR REPLACE INTO\s+(\w+)\s*\(([^)]+)\)', sql, re.IGNORECASE)
+        # Extract table name and columns more carefully
+        # Pattern: INSERT OR REPLACE INTO table_name (col1, col2, ...) VALUES
+        match = re.search(r'INSERT OR REPLACE INTO\s+(\w+)\s*\(([^)]+)\)\s*VALUES', sql, re.IGNORECASE | re.DOTALL)
         if match:
             table_name = match.group(1)
             columns = [col.strip() for col in match.group(2).split(',')]
 
-            # PostgreSQL requires explicit conflict target
-            # We'll assume the first column or 'id' is the unique constraint
-            conflict_column = 'id' if 'id' in columns else columns[0]
+            # Determine conflict column based on table-specific knowledge
+            # Map table names to their UNIQUE constraint columns
+            table_unique_constraints = {
+                'sync_tracking': 'spreadsheet_id',
+                'surveys': 'spreadsheet_id',
+                'survey_questions': 'survey_id, question_key',  # Composite unique
+                'respondents': 'respondent_hash',
+                'survey_answers': 'response_id, question_id'  # Composite unique
+            }
 
-            # Build UPDATE clause for all columns except the conflict column
-            update_columns = [col for col in columns if col != conflict_column]
+            conflict_column = None
+            if table_name in table_unique_constraints:
+                conflict_column = table_unique_constraints[table_name]
+            elif 'id' in columns:
+                conflict_column = 'id'
+            else:
+                conflict_column = columns[0]
+
+            # Build UPDATE clause for all columns except the conflict columns
+            # Handle both single and composite unique constraints
+            if ',' in conflict_column:
+                # Composite unique constraint (e.g., "survey_id, question_key")
+                conflict_cols = [c.strip() for c in conflict_column.split(',')]
+                update_columns = [col for col in columns if col not in conflict_cols]
+            else:
+                # Single column unique constraint
+                conflict_cols = [conflict_column]
+                update_columns = [col for col in columns if col != conflict_column]
+
             update_clause = ', '.join([f"{col} = EXCLUDED.{col}" for col in update_columns])
 
             sql = sql.replace('INSERT OR REPLACE INTO', 'INSERT INTO')
+
+            # Log the conversion for debugging
+            logger.debug(f"Converting INSERT OR REPLACE for table '{table_name}' with conflict on '{conflict_column}'")
 
             if 'RETURNING' in sql:
                 # Insert ON CONFLICT before RETURNING
