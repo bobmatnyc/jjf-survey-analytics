@@ -124,17 +124,20 @@
 // Health check functions
 async function loadHealthStatus() {
     try {
-        const response = await fetch('/health');
+        const response = await fetch('/health/complete');
         const data = await response.json();
-        
+
         updateOverallStatus(data);
         updateCategoryStatuses();
         updateSystemMetrics(data);
+        updateDetailedResults(data);
 
-        // Update last check time
-        document.getElementById('last-check').textContent =
-            new Date(data.timestamp).toLocaleString();
-        
+        // Update last check time if element exists
+        const lastCheckElement = document.getElementById('last-check');
+        if (lastCheckElement) {
+            lastCheckElement.textContent = new Date(data.timestamp).toLocaleString();
+        }
+
     } catch (error) {
         console.error('Error loading health status:', error);
         document.getElementById('overall-status').innerHTML = `
@@ -317,24 +320,24 @@ function updateSystemMetrics(data) {
     // Extract system metrics from health check data
     const checks = data && data.checks ? data.checks : [];
     const systemCheck = checks.find(c => c.name === 'System Resources');
-    
+
     if (systemCheck && systemCheck.details && systemCheck.details.metrics) {
         const metrics = systemCheck.details.metrics;
-        
-        document.getElementById('cpu-usage').textContent = 
+
+        document.getElementById('cpu-usage').textContent =
             metrics.cpu_percent ? `${metrics.cpu_percent.toFixed(1)}%` : '--';
-        
-        document.getElementById('memory-usage').textContent = 
+
+        document.getElementById('memory-usage').textContent =
             metrics.memory_percent ? `${metrics.memory_percent.toFixed(1)}%` : '--';
-        
-        document.getElementById('disk-usage').textContent = 
+
+        document.getElementById('disk-usage').textContent =
             metrics.disk_percent ? `${metrics.disk_percent.toFixed(1)}%` : '--';
     }
-    
+
     // Database status
-    const dbCheck = data.checks.find(c => c.name === 'SQLite Databases');
+    const dbCheck = checks.find(c => c.name === 'SQLite Databases');
     if (dbCheck) {
-        const statusText = dbCheck.status === 'pass' ? 'Healthy' : 
+        const statusText = dbCheck.status === 'pass' ? 'Healthy' :
                           dbCheck.status === 'warning' ? 'Warning' : 'Error';
         document.getElementById('database-status').textContent = statusText;
     }

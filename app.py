@@ -1878,6 +1878,23 @@ async def health_status():
             }
         }), 500
 
+@app.route('/health/complete')
+@async_route
+async def health_complete():
+    """Complete health check endpoint returning full JSON results with checks array."""
+    try:
+        results = await health_service.run_complete_health_check()
+        return jsonify(results), 200
+    except Exception as e:
+        logger.error(f"Complete health check failed: {str(e)}", exc_info=True)
+        return jsonify({
+            "overall_status": "fail",
+            "timestamp": datetime.now().isoformat(),
+            "error": str(e),
+            "summary": {"total": 0, "passed": 0, "failed": 1, "warnings": 0},
+            "checks": []
+        }), 500
+
 @app.route('/health/metrics')
 @async_route
 async def health_metrics():
