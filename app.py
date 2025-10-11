@@ -805,6 +805,38 @@ def organization_report(org_name):
         return render_template('error.html', error=str(e)), 500
 
 
+@app.route('/report/aggregate')
+def aggregate_report():
+    """
+    Generate aggregate report across all organizations.
+
+    Provides comprehensive maturity assessment aggregated across
+    all surveyed organizations with comparative analytics.
+    """
+    try:
+        if not SHEET_DATA:
+            return render_template('error.html',
+                                 error="Data not loaded. Please refresh data first."), 503
+
+        # Initialize report generator with AI enabled
+        generator = ReportGenerator(SHEET_DATA, enable_ai=True)
+
+        # Generate aggregate report across all organizations
+        report = generator.generate_aggregate_report()
+
+        if not report:
+            return render_template('error.html',
+                                 error="Unable to generate aggregate report"), 500
+
+        return render_template('aggregate_report.html', report=report)
+
+    except Exception as e:
+        print(f"Error generating aggregate report: {e}")
+        import traceback
+        traceback.print_exc()
+        return render_template('error.html', error=str(e)), 500
+
+
 # Load data on startup
 print("Loading data from Google Sheets on startup...")
 try:
