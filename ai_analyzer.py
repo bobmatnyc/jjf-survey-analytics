@@ -2,21 +2,24 @@
 AI-Powered Survey Response Analyzer
 Uses OpenRouter with cost-effective models for qualitative analysis
 """
-import os
-from typing import Dict, List, Any, Optional
-from openai import OpenAI
-from dotenv import load_dotenv
+
 import json
+import os
+from typing import Any, Dict, List, Optional
+
+from dotenv import load_dotenv
+from openai import OpenAI
 
 # Load environment variables
-load_dotenv('.env.local')
+load_dotenv(".env.local")
+
 
 class AIAnalyzer:
     """AI-powered analyzer for qualitative survey responses."""
 
     def __init__(self):
         """Initialize OpenRouter client."""
-        self.api_key = os.getenv('OPENROUTER_API_KEY')
+        self.api_key = os.getenv("OPENROUTER_API_KEY")
         if not self.api_key:
             raise ValueError("OPENROUTER_API_KEY not found in environment variables")
 
@@ -30,9 +33,7 @@ class AIAnalyzer:
         self.model = "anthropic/claude-3.5-haiku"
 
     def analyze_dimension_responses(
-        self,
-        dimension: str,
-        free_text_responses: List[Dict[str, Any]]
+        self, dimension: str, free_text_responses: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """
         Analyze free text responses for a dimension to generate score modifiers.
@@ -45,16 +46,12 @@ class AIAnalyzer:
             Dict with 'modifiers' list and 'summary' string
         """
         if not free_text_responses:
-            return {
-                'modifiers': [],
-                'summary': 'No free text responses provided for analysis.'
-            }
+            return {"modifiers": [], "summary": "No free text responses provided for analysis."}
 
         # Prepare context for AI
-        responses_text = "\n\n".join([
-            f"[{r['role']} - {r['respondent']}]:\n{r['text']}"
-            for r in free_text_responses
-        ])
+        responses_text = "\n\n".join(
+            [f"[{r['role']} - {r['respondent']}]:\n{r['text']}" for r in free_text_responses]
+        )
 
         prompt = f"""Analyze the following free text survey responses for the "{dimension}" technology dimension.
 
@@ -98,15 +95,12 @@ Focus on:
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are an expert technology assessment analyst. Analyze survey responses to identify qualitative factors that should adjust quantitative technology maturity scores."
+                        "content": "You are an expert technology assessment analyst. Analyze survey responses to identify qualitative factors that should adjust quantitative technology maturity scores.",
                     },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
+                    {"role": "user", "content": prompt},
                 ],
                 temperature=0.3,
-                max_tokens=2000
+                max_tokens=2000,
             )
 
             # Parse JSON response
@@ -123,15 +117,9 @@ Focus on:
 
         except Exception as e:
             print(f"Error analyzing dimension responses: {e}")
-            return {
-                'modifiers': [],
-                'summary': f'Error analyzing responses: {str(e)}'
-            }
+            return {"modifiers": [], "summary": f"Error analyzing responses: {str(e)}"}
 
-    def summarize_all_feedback(
-        self,
-        all_responses: List[Dict[str, Any]]
-    ) -> str:
+    def summarize_all_feedback(self, all_responses: List[Dict[str, Any]]) -> str:
         """
         Generate a comprehensive summary of all free text feedback across organizations.
 
@@ -147,7 +135,7 @@ Focus on:
         # Group by organization
         org_responses = {}
         for r in all_responses:
-            org = r.get('organization', 'Unknown')
+            org = r.get("organization", "Unknown")
             if org not in org_responses:
                 org_responses[org] = []
             org_responses[org].append(r)
@@ -179,15 +167,12 @@ Keep the summary professional, actionable, and suitable for a dashboard overview
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a technology consultant summarizing feedback from nonprofit organizations about their technology capabilities."
+                        "content": "You are a technology consultant summarizing feedback from nonprofit organizations about their technology capabilities.",
                     },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
+                    {"role": "user", "content": prompt},
                 ],
                 temperature=0.4,
-                max_tokens=500
+                max_tokens=500,
             )
 
             return response.choices[0].message.content.strip()
@@ -197,9 +182,7 @@ Keep the summary professional, actionable, and suitable for a dashboard overview
             return f"Error generating summary: {str(e)}"
 
     def analyze_organization_qualitative(
-        self,
-        org_name: str,
-        all_responses: Dict[str, List[Dict[str, Any]]]
+        self, org_name: str, all_responses: Dict[str, List[Dict[str, Any]]]
     ) -> Dict[str, Any]:
         """
         Comprehensive qualitative analysis for an organization across all dimensions.
@@ -211,16 +194,12 @@ Keep the summary professional, actionable, and suitable for a dashboard overview
         Returns:
             Dict with dimension-level analysis and overall insights
         """
-        results = {
-            'organization': org_name,
-            'dimensions': {},
-            'overall_summary': ''
-        }
+        results = {"organization": org_name, "dimensions": {}, "overall_summary": ""}
 
         # Analyze each dimension
         for dimension, responses in all_responses.items():
             if responses:
-                results['dimensions'][dimension] = self.analyze_dimension_responses(
+                results["dimensions"][dimension] = self.analyze_dimension_responses(
                     dimension, responses
                 )
 
@@ -228,21 +207,16 @@ Keep the summary professional, actionable, and suitable for a dashboard overview
         all_texts = []
         for dimension, responses in all_responses.items():
             for r in responses:
-                all_texts.append({
-                    'dimension': dimension,
-                    'organization': org_name,
-                    **r
-                })
+                all_texts.append({"dimension": dimension, "organization": org_name, **r})
 
         if all_texts:
-            results['overall_summary'] = self.summarize_all_feedback(all_texts)
+            results["overall_summary"] = self.summarize_all_feedback(all_texts)
 
         return results
 
 
 def extract_free_text_responses(
-    sheet_data: Dict[str, List[Dict[str, Any]]],
-    org_name: str
+    sheet_data: Dict[str, List[Dict[str, Any]]], org_name: str
 ) -> Dict[str, List[Dict[str, Any]]]:
     """
     Extract all free text (non-numeric) responses for an organization.
@@ -255,32 +229,32 @@ def extract_free_text_responses(
         Dict mapping dimension names to lists of free text responses
     """
     dimension_responses = {
-        'Program Technology': [],
-        'Business Systems': [],
-        'Data Management': [],
-        'Infrastructure': [],
-        'Organizational Culture': []
+        "Program Technology": [],
+        "Business Systems": [],
+        "Data Management": [],
+        "Infrastructure": [],
+        "Organizational Culture": [],
     }
 
     # Dimension code mapping
     dimension_codes = {
-        'PT': 'Program Technology',
-        'BS': 'Business Systems',
-        'D': 'Data Management',
-        'I': 'Infrastructure',
-        'OC': 'Organizational Culture'
+        "PT": "Program Technology",
+        "BS": "Business Systems",
+        "D": "Data Management",
+        "I": "Infrastructure",
+        "OC": "Organizational Culture",
     }
 
     # Check CEO, Tech, Staff tabs
-    for tab_name, role in [('CEO', 'CEO'), ('Tech', 'Tech Lead'), ('Staff', 'Staff')]:
+    for tab_name, role in [("CEO", "CEO"), ("Tech", "Tech Lead"), ("Staff", "Staff")]:
         records = sheet_data.get(tab_name, [])
 
         for record in records:
-            if record.get('Organization') == org_name:
+            if record.get("Organization") == org_name:
                 # Extract free text responses (non-numeric)
                 for key, value in record.items():
                     # Look for question IDs that match dimension pattern
-                    if key.startswith(('C-', 'TL-', 'S-')) and value:
+                    if key.startswith(("C-", "TL-", "S-")) and value:
                         # Check if it's free text (not a number)
                         try:
                             float(str(value).strip())
@@ -288,39 +262,43 @@ def extract_free_text_responses(
                             continue
                         except (ValueError, TypeError):
                             # It's free text, extract dimension
-                            parts = key.split('-')
+                            parts = key.split("-")
                             if len(parts) >= 2:
                                 code = parts[1]
                                 dimension = dimension_codes.get(code)
 
                                 if dimension and len(str(value).strip()) > 10:  # Meaningful text
-                                    dimension_responses[dimension].append({
-                                        'respondent': record.get('Name', record.get('Email', 'Unknown')),
-                                        'role': role,
-                                        'text': str(value).strip(),
-                                        'question_id': key
-                                    })
+                                    dimension_responses[dimension].append(
+                                        {
+                                            "respondent": record.get(
+                                                "Name", record.get("Email", "Unknown")
+                                            ),
+                                            "role": role,
+                                            "text": str(value).strip(),
+                                            "question_id": key,
+                                        }
+                                    )
 
     return dimension_responses
 
 
 # Example usage
-if __name__ == '__main__':
+if __name__ == "__main__":
     analyzer = AIAnalyzer()
 
     # Test with sample data
     sample_responses = [
         {
-            'respondent': 'Jane Smith',
-            'role': 'CEO',
-            'text': 'We have strong program delivery tools but struggle with integration between systems. Staff training is a major gap.'
+            "respondent": "Jane Smith",
+            "role": "CEO",
+            "text": "We have strong program delivery tools but struggle with integration between systems. Staff training is a major gap.",
         },
         {
-            'respondent': 'John Doe',
-            'role': 'Tech Lead',
-            'text': 'Infrastructure is solid but we need better data governance policies. Current systems are not well documented.'
-        }
+            "respondent": "John Doe",
+            "role": "Tech Lead",
+            "text": "Infrastructure is solid but we need better data governance policies. Current systems are not well documented.",
+        },
     ]
 
-    result = analyzer.analyze_dimension_responses('Program Technology', sample_responses)
+    result = analyzer.analyze_dimension_responses("Program Technology", sample_responses)
     print(json.dumps(result, indent=2))
