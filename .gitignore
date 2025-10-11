@@ -245,3 +245,4 @@ yarn-error.log*
 .claude-mpm/
 .claude/
 CLAUDE_MPM_INITIALIZATION_REPORT.md
+.env.local

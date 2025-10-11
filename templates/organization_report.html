@@ -1,0 +1,376 @@
+{% extends "simple_base.html" %}
+
+{% block title %}{{ org_name }} - Technology Maturity Report{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Breadcrumb Navigation -->
+    <nav class="flex" aria-label="Breadcrumb">
+        <ol class="inline-flex items-center space-x-1 md:space-x-3">
+            <li class="inline-flex items-center">
+                <a href="/" class="inline-flex items-center text-sm font-medium text-gray-700 hover:text-survey-blue">
+                    <i class="fas fa-home mr-2"></i>
+                    Home
+                </a>
+            </li>
+            <li>
+                <div class="flex items-center">
+                    <i class="fas fa-chevron-right text-gray-400 mx-2"></i>
+                    <a href="/report/aggregate" class="text-sm font-medium text-gray-700 hover:text-survey-blue">
+                        Reports
+                    </a>
+                </div>
+            </li>
+            <li>
+                <div class="flex items-center">
+                    <i class="fas fa-chevron-right text-gray-400 mx-2"></i>
+                    <span class="text-sm font-medium text-gray-500">{{ org_name }}</span>
+                </div>
+            </li>
+        </ol>
+    </nav>
+
+    <!-- Report Header with Maturity Badge -->
+    <div class="bg-gradient-to-r from-survey-blue to-blue-600 rounded-lg shadow-lg p-8 text-white">
+        <div class="flex items-center justify-between">
+            <div>
+                <div class="flex items-center space-x-3 mb-2">
+                    <i class="fas fa-building text-3xl"></i>
+                    <h1 class="text-4xl font-bold">{{ org_name }}</h1>
+                </div>
+                <p class="text-blue-100 text-sm">Technology Maturity Assessment Report</p>
+                <p class="text-blue-200 text-xs mt-1">
+                    <i class="fas fa-calendar mr-1"></i>
+                    Generated: {{ report.header.generated_at }}
+                </p>
+            </div>
+            <div class="text-right">
+                {% if report.maturity %}
+                <div class="bg-white bg-opacity-20 rounded-lg p-4 backdrop-blur-sm">
+                    <div class="text-5xl font-bold">{{ report.maturity.overall_score }}</div>
+                    <div class="text-sm text-blue-100">out of 5.0</div>
+                    <div class="mt-2 px-4 py-1 bg-white rounded-full text-survey-blue font-bold text-sm">
+                        {{ report.maturity.maturity_level }}
+                    </div>
+                    <div class="text-xs text-blue-200 mt-1">{{ report.maturity.maturity_percentage }}th percentile</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="flex space-x-3">
+        <a href="/org/{{ org_name }}" class="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+            <i class="fas fa-eye mr-2"></i>
+            View Organization Detail
+        </a>
+        <a href="/report/aggregate" class="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+            <i class="fas fa-chart-bar mr-2"></i>
+            View Aggregate Report
+        </a>
+        <button onclick="window.print()" class="inline-flex items-center px-4 py-2 bg-survey-green border border-transparent rounded-lg text-sm font-medium text-white hover:bg-green-700 transition-colors">
+            <i class="fas fa-print mr-2"></i>
+            Print Report
+        </button>
+    </div>
+
+    {% if report.maturity %}
+    <!-- Technology Maturity Overview -->
+    <div class="bg-white rounded-lg shadow-md overflow-hidden">
+        <div class="px-6 py-4 bg-gray-50 border-b border-gray-200">
+            <h2 class="text-xl font-semibold text-gray-900 flex items-center">
+                <i class="fas fa-chart-line text-survey-blue mr-3"></i>
+                Technology Maturity Overview
+            </h2>
+        </div>
+        <div class="p-6">
+            <div class="mb-6">
+                <p class="text-gray-700 text-sm leading-relaxed">
+                    {{ report.maturity.maturity_description }}
+                </p>
+            </div>
+
+            <!-- Maturity Scale Visualization -->
+            <div class="relative pt-1">
+                <div class="flex mb-2 items-center justify-between text-xs">
+                    <span class="text-gray-600">Building</span>
+                    <span class="text-gray-600">Emerging</span>
+                    <span class="text-gray-600">Thriving</span>
+                </div>
+                <div class="overflow-hidden h-3 text-xs flex rounded-full bg-gray-200">
+                    <div style="width: {{ report.maturity.maturity_percentage }}%"
+                         class="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center
+                         {% if report.maturity.maturity_percentage < 36 %}bg-red-500
+                         {% elif report.maturity.maturity_percentage < 71 %}bg-yellow-500
+                         {% else %}bg-green-500{% endif %}"></div>
+                </div>
+                <div class="flex justify-between mt-1 text-xs text-gray-500">
+                    <span>0%</span>
+                    <span>50%</span>
+                    <span>100%</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dimension Scores -->
+    <div class="bg-white rounded-lg shadow-md overflow-hidden">
+        <div class="px-6 py-4 bg-gray-50 border-b border-gray-200">
+            <h2 class="text-xl font-semibold text-gray-900 flex items-center">
+                <i class="fas fa-layer-group text-survey-purple mr-3"></i>
+                Technology Dimensions
+            </h2>
+        </div>
+        <div class="p-6 space-y-6">
+            {% for dimension, analysis in report.maturity.variance_analysis.items() %}
+            <div class="border-b border-gray-200 pb-4 last:border-0">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-base font-semibold text-gray-900">{{ dimension }}</h3>
+                    <div class="flex items-center space-x-3">
+                        <span class="text-2xl font-bold text-survey-blue">{{ "%.2f"|format(analysis.weighted_score) }}</span>
+                        <span class="text-sm text-gray-500">/ 5.0</span>
+                    </div>
+                </div>
+
+                <!-- Score Bar -->
+                <div class="relative pt-1 mb-3">
+                    <div class="overflow-hidden h-2 text-xs flex rounded-full bg-gray-200">
+                        <div style="width: {{ ((analysis.weighted_score / 5.0) * 100)|int }}%"
+                             class="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center
+                             {% if analysis.weighted_score < 2.5 %}bg-red-500
+                             {% elif analysis.weighted_score < 3.5 %}bg-yellow-500
+                             {% else %}bg-green-500{% endif %}"></div>
+                    </div>
+                </div>
+
+                <!-- Stakeholder Breakdown -->
+                <div class="grid grid-cols-3 gap-4 mt-3">
+                    <div class="text-center">
+                        <div class="text-xs text-gray-500 mb-1">CEO</div>
+                        <div class="text-sm font-semibold {% if analysis.ceo_score > 0 %}text-gray-900{% else %}text-gray-400{% endif %}">
+                            {% if analysis.ceo_score > 0 %}
+                                {{ "%.1f"|format(analysis.ceo_score) }}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-xs text-gray-500 mb-1">Tech Lead</div>
+                        <div class="text-sm font-semibold {% if analysis.tech_score > 0 %}text-gray-900{% else %}text-gray-400{% endif %}">
+                            {% if analysis.tech_score > 0 %}
+                                {{ "%.1f"|format(analysis.tech_score) }}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-xs text-gray-500 mb-1">Staff</div>
+                        <div class="text-sm font-semibold {% if analysis.staff_score > 0 %}text-gray-900{% else %}text-gray-400{% endif %}">
+                            {% if analysis.staff_score > 0 %}
+                                {{ "%.1f"|format(analysis.staff_score) }}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Variance Indicator -->
+                <div class="mt-3 flex items-center justify-between">
+                    <span class="text-xs text-gray-600">Stakeholder Alignment:</span>
+                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium
+                        {% if analysis.color == 'Green' %}bg-green-100 text-green-800
+                        {% elif analysis.color == 'Yellow' %}bg-yellow-100 text-yellow-800
+                        {% else %}bg-red-100 text-red-800{% endif %}">
+                        <i class="fas fa-circle text-xs mr-1"></i>
+                        {{ analysis.description }}
+                    </span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- AI-Powered Qualitative Insights -->
+    {% if report.ai_insights and report.ai_insights.dimensions %}
+    <div class="bg-white rounded-lg shadow-md overflow-hidden">
+        <div class="px-6 py-4 bg-gray-50 border-b border-gray-200">
+            <h2 class="text-xl font-semibold text-gray-900 flex items-center">
+                <i class="fas fa-brain text-survey-purple mr-3"></i>
+                Qualitative Analysis & Score Modifiers
+                <span class="ml-3 px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full">AI-Powered</span>
+            </h2>
+        </div>
+        <div class="p-6 space-y-6">
+            {% for dimension, analysis in report.ai_insights.dimensions.items() %}
+            {% if analysis.modifiers or analysis.summary %}
+            <div class="border-b border-gray-200 pb-6 last:border-0 last:pb-0">
+                <h3 class="text-lg font-semibold text-gray-900 mb-3">{{ dimension }}</h3>
+
+                <!-- Summary -->
+                {% if analysis.summary %}
+                <div class="bg-blue-50 p-4 rounded-lg mb-4">
+                    <p class="text-sm text-gray-700 leading-relaxed">{{ analysis.summary }}</p>
+                </div>
+                {% endif %}
+
+                <!-- Score Modifiers -->
+                {% if analysis.modifiers %}
+                <div class="space-y-3">
+                    <h4 class="text-sm font-semibold text-gray-700 mb-2">Identified Score Modifiers:</h4>
+                    {% for modifier in analysis.modifiers %}
+                    <div class="flex items-start space-x-3 p-3 rounded-lg border
+                        {% if modifier.value > 0 %}bg-green-50 border-green-200
+                        {% else %}bg-red-50 border-red-200{% endif %}">
+                        <div class="flex-shrink-0 mt-1">
+                            {% if modifier.value > 0 %}
+                            <i class="fas fa-arrow-up text-green-600"></i>
+                            {% else %}
+                            <i class="fas fa-arrow-down text-red-600"></i>
+                            {% endif %}
+                        </div>
+                        <div class="flex-1">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-xs font-semibold
+                                    {% if modifier.value > 0 %}text-green-800
+                                    {% else %}text-red-800{% endif %}">
+                                    {{ modifier.respondent }} ({{ modifier.role }})
+                                </span>
+                                <span class="text-xs font-bold px-2 py-1 rounded
+                                    {% if modifier.value > 0 %}bg-green-200 text-green-900
+                                    {% else %}bg-red-200 text-red-900{% endif %}">
+                                    {% if modifier.value > 0 %}+{% endif %}{{ "%.1f"|format(modifier.value) }}
+                                </span>
+                            </div>
+                            <p class="text-sm text-gray-700 font-medium mb-1">{{ modifier.factor }}</p>
+                            <p class="text-xs text-gray-600 italic">{{ modifier.reasoning }}</p>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Recommendations -->
+    <div class="bg-white rounded-lg shadow-md overflow-hidden">
+        <div class="px-6 py-4 bg-gray-50 border-b border-gray-200">
+            <h2 class="text-xl font-semibold text-gray-900 flex items-center">
+                <i class="fas fa-lightbulb text-survey-orange mr-3"></i>
+                Strategic Recommendations
+            </h2>
+        </div>
+        <div class="p-6">
+            <div class="space-y-3">
+                {% for rec in report.maturity.recommendations %}
+                <div class="flex items-start space-x-3 p-4 bg-blue-50 rounded-lg border-l-4 border-survey-blue">
+                    <div class="flex-shrink-0 mt-1">
+                        <i class="fas fa-arrow-right text-survey-blue"></i>
+                    </div>
+                    <p class="text-sm text-gray-800">{{ rec }}</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Team Members & Contacts -->
+    <div class="bg-white rounded-lg shadow-md overflow-hidden">
+        <div class="px-6 py-4 bg-gray-50 border-b border-gray-200">
+            <h2 class="text-xl font-semibold text-gray-900 flex items-center">
+                <i class="fas fa-users text-survey-purple mr-3"></i>
+                Team Members ({{ report.contacts|length }})
+            </h2>
+        </div>
+        <div class="divide-y divide-gray-200">
+            {% for contact in report.contacts %}
+            <div class="p-6 hover:bg-gray-50 transition-colors">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-4">
+                        <div class="flex-shrink-0">
+                            {% if contact.type == 'CEO' %}
+                            <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                                <i class="fas fa-user-tie text-blue-600"></i>
+                            </div>
+                            {% elif contact.type == 'Tech Lead' %}
+                            <div class="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
+                                <i class="fas fa-laptop-code text-purple-600"></i>
+                            </div>
+                            {% else %}
+                            <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                                <i class="fas fa-user text-green-600"></i>
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div>
+                            <h3 class="text-base font-semibold text-gray-900">{{ contact.name }}</h3>
+                            <p class="text-sm text-gray-600">{{ contact.role }}</p>
+                            <p class="text-xs text-gray-500 mt-1">
+                                <i class="fas fa-envelope mr-1"></i>
+                                <a href="/contact/{{ contact.email }}" class="hover:text-survey-blue">{{ contact.email }}</a>
+                            </p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        {% if contact.survey_complete %}
+                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                            <i class="fas fa-check-circle mr-1"></i>
+                            Complete
+                        </span>
+                        {% if contact.submission_date %}
+                        <p class="text-xs text-gray-500 mt-1">{{ contact.submission_date }}</p>
+                        {% endif %}
+                        {% else %}
+                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
+                            <i class="fas fa-clock mr-1"></i>
+                            Pending
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Intake Insights -->
+    {% if report.intake %}
+    <div class="bg-white rounded-lg shadow-md overflow-hidden">
+        <div class="px-6 py-4 bg-gray-50 border-b border-gray-200">
+            <h2 class="text-xl font-semibold text-gray-900 flex items-center">
+                <i class="fas fa-clipboard-list text-survey-orange mr-3"></i>
+                Organization Context
+            </h2>
+        </div>
+        <div class="p-6 space-y-4">
+            {% if report.intake.ai_usage %}
+            <div>
+                <h4 class="text-sm font-semibold text-gray-700 mb-2">AI Usage</h4>
+                <p class="text-sm text-gray-600 bg-blue-50 p-3 rounded">{{ report.intake.ai_usage }}</p>
+            </div>
+            {% endif %}
+            {% if report.intake.ai_policy %}
+            <div>
+                <h4 class="text-sm font-semibold text-gray-700 mb-2">AI Policy</h4>
+                <p class="text-sm text-gray-600 bg-blue-50 p-3 rounded">{{ report.intake.ai_policy }}</p>
+            </div>
+            {% endif %}
+            {% if report.intake.comments %}
+            <div>
+                <h4 class="text-sm font-semibold text-gray-700 mb-2">Additional Comments</h4>
+                <p class="text-sm text-gray-600 bg-blue-50 p-3 rounded italic">"{{ report.intake.comments }}"</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
