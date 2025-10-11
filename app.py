@@ -739,6 +739,38 @@ def api_stats():
     return jsonify(get_stats())
 
 
+@app.route('/health')
+def health_check():
+    """Health check endpoint for Railway deployment."""
+    try:
+        # Check if data is loaded
+        data_loaded = bool(SHEET_DATA and '_metadata' in SHEET_DATA)
+
+        # Basic health status
+        health_status = {
+            'status': 'healthy' if data_loaded else 'degraded',
+            'data_loaded': data_loaded,
+            'app_version': 'simple-app-with-ai',
+            'checks': {
+                'sheet_data': 'ok' if data_loaded else 'no_data'
+            }
+        }
+
+        if data_loaded:
+            metadata = SHEET_DATA.get('_metadata', {})
+            health_status['last_fetch'] = metadata.get('last_fetch', 'unknown')
+            health_status['total_rows'] = metadata.get('total_rows', 0)
+
+        # Return 200 even if degraded - Railway just needs app to respond
+        return jsonify(health_status), 200
+
+    except Exception as e:
+        return jsonify({
+            'status': 'unhealthy',
+            'error': str(e)
+        }), 500
+
+
 @app.route('/report/<org_name>')
 def organization_report(org_name):
     """
