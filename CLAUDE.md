@@ -1,7 +1,7 @@
 # CLAUDE.md - AI Agent Instructions
 
 **Project:** JJF Survey Analytics Platform
-**Last Updated:** 2025-10-06
+**Last Updated:** 2025-10-09
 **Version:** 1.0.0
 
 > This file provides comprehensive instructions for Claude Code and other AI agents working on this project. All operations follow the "ONE way to do ANYTHING" principle.
@@ -614,12 +614,14 @@ python healthcheck.py --deps-only
 - **13 unique respondents** tracked
 - **6 Google Sheets** sources (2 Surveys, 3 Assessments, 1 Inventory)
 
-### Recent Updates
-- ✅ **Anonymous Row Filtering** - Filter empty rows with no meaningful data
-- ✅ **Simplified Dashboard** - Single unified Recent Activity view
-- ✅ **Empty Row Validation** - Skip question definitions and metadata-only rows
-- ✅ **Health Dashboard** - Comprehensive monitoring system
-- ✅ **Auto-Sync Service** - Intelligent change detection and sync
+### Recent Updates (Last 30 Days)
+- ✅ **PostgreSQL Schema Migration** - Full compatibility with Railway production database
+- ✅ **Single Source of Truth Architecture** - Auto-regenerating PostgreSQL from Google Sheets
+- ✅ **Sync Tracking Improvements** - Fixed INSERT OR REPLACE conversion for PostgreSQL
+- ✅ **UI Terminology Standardization** - Unified 'submission' terminology across interface
+- ✅ **Comprehensive Documentation** - Added development guides and deployment docs
+- ✅ **Enhanced Makefile** - Complete command system with shortcuts
+- ✅ **Security Documentation** - Added v1.0.1 security debt tracking
 
 ### Deployment Status
 - ✅ **Railway Production:** Live and auto-deploying from GitHub
@@ -800,5 +802,59 @@ See [Troubleshooting](#-troubleshooting) section above
 
 ---
 
-*Last updated: 2025-10-06*
+## 📈 Recent Activity Summary (Last 30 Days)
+
+### Development Statistics
+- **82 commits** by Robert (Masa) Matsuoka
+- **Primary focus:** PostgreSQL migration and production stability
+- **Most modified file:** app.py (56 changes)
+- **Active branch:** master (stable)
+
+### Key Development Areas
+
+#### Database Migration (Oct 6-7)
+- Fixed PostgreSQL schema compatibility for survey normalization
+- Improved INSERT OR REPLACE conversion for sync_tracking table
+- Ensured sync_tracking table creation on PostgreSQL startup
+- Migrated from SQLite to PostgreSQL with full schema parity
+
+#### Architecture Improvements (Oct 6)
+- Implemented single source of truth architecture with auto-regenerating PostgreSQL
+- Added API endpoints for SQLite to PostgreSQL migration
+- Updated schema to match SQLite normalized structure exactly
+- Created database verification and recreation endpoints
+
+#### Documentation Enhancements (Oct 6)
+- Added comprehensive development guides and deployment documentation
+- Created security debt documentation for v1.0.1
+- Enhanced Makefile with comprehensive command system
+- Removed obsolete deployment documentation
+
+#### User Experience (Oct 6)
+- Standardized UI terminology from 'response' to 'submission'
+- Fixed cache headers and PostgreSQL route detection
+- Improved survey data verification endpoints
+
+### Technical Debt Addressed
+- ✅ PostgreSQL boolean casting and foreign key handling
+- ✅ SQLite datetime() to PostgreSQL conditional query conversion
+- ✅ RealDictCursor dictionary access compatibility
+- ✅ Schema synchronization between local and production environments
+
+### Files with Significant Updates
+1. **app.py** - Core application logic (56 modifications)
+2. **templates/dashboard.html** - UI improvements (6 modifications)
+3. **survey_analytics.py** - Analytics engine updates (5 modifications)
+4. **railway_init.py** - Production initialization (4 modifications)
+5. **survey_normalizer.py** - Schema compatibility fixes (3 modifications)
+
+### Next Focus Areas
+- Continue monitoring PostgreSQL production stability
+- Enhance health check coverage for database migrations
+- Improve error handling for edge cases
+- Expand test coverage for PostgreSQL-specific logic
+
+---
+
+*Last updated: 2025-10-09*
 *CLAUDE.md Version: 1.0.0*
