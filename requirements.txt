@@ -18,8 +18,16 @@ schedule>=1.2.0
 
 # PostgreSQL support
 psycopg2-binary>=2.9.7
+
+# AI Analysis
 httpx==0.28.1
 openai==2.3.0
 pydantic==2.12.0
 pydantic_core==2.41.1
 python-dotenv==1.1.1
+
+# Code quality and linting
+flake8>=7.3.0
+black>=25.0.0
+isort>=6.1.0
+pylint>=3.3.0

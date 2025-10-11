@@ -1,6 +1,6 @@
 .PHONY: help install test lint format clean setup init extract status
 .PHONY: dev build deploy quality test-cov health sync normalize
-.PHONY: lint-fix format-check typecheck all-checks
+.PHONY: lint-fix format-check typecheck all-checks pre-deploy
 
 # =============================================================================
 # JJF Survey Analytics Platform - Makefile
@@ -41,6 +41,7 @@ help:
 	@echo "  make format       - Format code with black and isort"
 	@echo "  make format-check - Check code formatting (no changes)"
 	@echo "  make typecheck    - Run mypy type checking"
+	@echo "  make pre-deploy   - Run pre-deployment production checks"
 	@echo ""
 	@echo "🧹 CLEANUP"
 	@echo "  make clean        - Remove generated files and caches"
@@ -199,6 +200,11 @@ typecheck:
 # Run all checks together
 all-checks: format-check lint typecheck test
 	@echo "✅ All checks passed!"
+
+# Run pre-deployment production checks
+pre-deploy:
+	@echo "🚀 Running pre-deployment checks..."
+	python pre_deploy_check.py
 
 # =============================================================================
 # SERVICES & OPERATIONS
