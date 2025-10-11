@@ -1,0 +1,325 @@
+{% extends "simple_base.html" %}
+
+{% block title %}Home - JJF Survey Analytics{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <!-- Page Header -->
+    <div class="mb-8">
+        <h2 class="text-3xl font-bold text-gray-900 mb-2">
+            <i class="fas fa-home mr-3 text-survey-blue"></i>
+            Welcome to JJF Survey Analytics
+        </h2>
+        <p class="text-gray-600">Simple, focused data extraction and viewing</p>
+    </div>
+
+    {% if db_ready and dashboard.overview %}
+    <!-- Organization Participation Dashboard -->
+    <div class="mt-6">
+        <h2 class="text-2xl font-bold text-gray-900 mb-4">
+            <i class="fas fa-building mr-2 text-survey-purple"></i>
+            Organization Participation Dashboard
+        </h2>
+
+        <!-- Overview Metrics Cards (Clickable) -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+            <!-- Total Organizations -->
+            <a href="/summary/organizations" class="bg-white rounded-lg shadow-md p-4 hover-scale cursor-pointer transition-all hover:shadow-lg transform flex flex-col">
+                <div class="flex-grow">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-600 mb-1">Total Organizations</p>
+                            <p class="text-3xl font-bold text-gray-900">{{ dashboard.overview.total_organizations }}</p>
+                            <p class="text-xs text-gray-500 mt-1">Started Intake</p>
+                        </div>
+                        <i class="fas fa-building text-3xl text-gray-400"></i>
+                    </div>
+                </div>
+                <div class="mt-auto pt-2 border-t border-gray-100">
+                    <p class="text-xs text-survey-blue font-medium flex items-center">
+                        View Details <i class="fas fa-arrow-right ml-1"></i>
+                    </p>
+                </div>
+            </a>
+
+            <!-- CEO Surveys -->
+            <a href="/summary/ceo" class="bg-white rounded-lg shadow-md p-4 hover-scale cursor-pointer transition-all hover:shadow-lg transform flex flex-col">
+                <div class="flex-grow">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-600 mb-1">CEO Surveys</p>
+                            <p class="text-3xl font-bold text-blue-600">{{ dashboard.overview.ceo_complete }}</p>
+                            <p class="text-xs text-blue-500 mt-1">{{ dashboard.overview.ceo_percent }}% Complete</p>
+                        </div>
+                        <i class="fas fa-user-tie text-3xl text-blue-400"></i>
+                    </div>
+                </div>
+                <div class="mt-auto pt-2 border-t border-gray-100">
+                    <p class="text-xs text-blue-600 font-medium flex items-center">
+                        View Responses <i class="fas fa-arrow-right ml-1"></i>
+                    </p>
+                </div>
+            </a>
+
+            <!-- Tech Leads -->
+            <a href="/summary/tech" class="bg-white rounded-lg shadow-md p-4 hover-scale cursor-pointer transition-all hover:shadow-lg transform flex flex-col">
+                <div class="flex-grow">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-600 mb-1">Tech Leads</p>
+                            <p class="text-3xl font-bold text-purple-600">{{ dashboard.overview.tech_complete }}</p>
+                            <p class="text-xs text-purple-500 mt-1">{{ dashboard.overview.tech_percent }}% Complete</p>
+                        </div>
+                        <i class="fas fa-laptop-code text-3xl text-purple-400"></i>
+                    </div>
+                </div>
+                <div class="mt-auto pt-2 border-t border-gray-100">
+                    <p class="text-xs text-purple-600 font-medium flex items-center">
+                        View Responses <i class="fas fa-arrow-right ml-1"></i>
+                    </p>
+                </div>
+            </a>
+
+            <!-- Staff Responses -->
+            <a href="/summary/staff" class="bg-white rounded-lg shadow-md p-4 hover-scale cursor-pointer transition-all hover:shadow-lg transform flex flex-col">
+                <div class="flex-grow">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-600 mb-1">Staff Responses</p>
+                            <p class="text-3xl font-bold text-green-600">{{ dashboard.overview.staff_complete }}</p>
+                            <p class="text-xs text-green-500 mt-1">{{ dashboard.overview.staff_percent }}% Complete</p>
+                        </div>
+                        <i class="fas fa-users text-3xl text-green-400"></i>
+                    </div>
+                </div>
+                <div class="mt-auto pt-2 border-t border-gray-100">
+                    <p class="text-xs text-green-600 font-medium flex items-center">
+                        View Responses <i class="fas fa-arrow-right ml-1"></i>
+                    </p>
+                </div>
+            </a>
+
+            <!-- Fully Complete -->
+            <a href="/summary/complete" class="bg-white rounded-lg shadow-md p-4 hover-scale cursor-pointer transition-all hover:shadow-lg transform flex flex-col">
+                <div class="flex-grow">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-600 mb-1">Fully Complete</p>
+                            <p class="text-3xl font-bold text-survey-green">{{ dashboard.overview.fully_complete }}</p>
+                            <p class="text-xs text-survey-green mt-1">{{ dashboard.overview.fully_percent }}% Complete</p>
+                        </div>
+                        <i class="fas fa-check-circle text-3xl text-green-400"></i>
+                    </div>
+                </div>
+                <div class="mt-auto pt-2 border-t border-gray-100">
+                    <p class="text-xs text-survey-green font-medium flex items-center">
+                        View All Complete <i class="fas fa-arrow-right ml-1"></i>
+                    </p>
+                </div>
+            </a>
+        </div>
+
+        <!-- Participation Funnel -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h3 class="text-xl font-semibold mb-4 text-gray-800">
+                <i class="fas fa-filter mr-2 text-survey-orange"></i>
+                Participation Funnel
+            </h3>
+
+            <div class="space-y-3">
+                <!-- Intake -->
+                <div>
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-sm font-medium text-gray-700">Intake Completed</span>
+                        <span class="text-sm font-bold text-gray-900">{{ dashboard.funnel.intake }} (100%)</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-3">
+                        <div class="bg-gray-600 h-3 rounded-full" style="width: 100%"></div>
+                    </div>
+                </div>
+
+                <!-- CEO -->
+                <div>
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-sm font-medium text-gray-700">CEO Survey Completed</span>
+                        <span class="text-sm font-bold text-blue-600">{{ dashboard.funnel.ceo }} ({{ dashboard.funnel.ceo_percent }}%)</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-3">
+                        <div class="bg-blue-500 h-3 rounded-full" style="width: {{ dashboard.funnel.ceo_percent }}%"></div>
+                    </div>
+                </div>
+
+                <!-- Tech Lead -->
+                <div>
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-sm font-medium text-gray-700">Tech Lead Survey Completed</span>
+                        <span class="text-sm font-bold text-purple-600">{{ dashboard.funnel.tech }} ({{ dashboard.funnel.tech_percent }}%)</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-3">
+                        <div class="bg-purple-500 h-3 rounded-full" style="width: {{ dashboard.funnel.tech_percent }}%"></div>
+                    </div>
+                </div>
+
+                <!-- Staff -->
+                <div>
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-sm font-medium text-gray-700">Staff Survey Completed</span>
+                        <span class="text-sm font-bold text-green-600">{{ dashboard.funnel.staff }} ({{ dashboard.funnel.staff_percent }}%)</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-3">
+                        <div class="bg-green-500 h-3 rounded-full" style="width: {{ dashboard.funnel.staff_percent }}%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Drop-off Alert -->
+            {% if dashboard.funnel.ceo_percent < 20 %}
+            <div class="mt-4 bg-red-50 border border-red-200 rounded-lg p-3">
+                <div class="flex items-center">
+                    <i class="fas fa-exclamation-triangle text-red-500 mr-2"></i>
+                    <p class="text-sm text-red-800">
+                        <strong>Major bottleneck:</strong> {{ dashboard.overview.not_started }} organizations ({{ 100 - dashboard.overview.ceo_percent }}%) have not progressed beyond intake
+                    </p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Organizations Status Table -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h3 class="text-xl font-semibold mb-4 text-gray-800">
+                <i class="fas fa-list mr-2 text-survey-blue"></i>
+                Organizations Status (Recent 10 with Activity)
+            </h3>
+
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Organization
+                            </th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Intake Date
+                            </th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                CEO
+                            </th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Tech
+                            </th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Staff
+                            </th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Overall
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        {% for org in dashboard.organizations %}
+                        <tr class="hover:bg-blue-50 cursor-pointer transition-colors" onclick="window.location='/org/{{ org.organization }}'">
+                            <td class="px-4 py-3 text-sm font-medium text-survey-blue hover:underline">
+                                <a href="/org/{{ org.organization }}" class="flex items-center">
+                                    {{ org.organization }}
+                                    <i class="fas fa-external-link-alt ml-2 text-xs"></i>
+                                </a>
+                            </td>
+                            <td class="px-4 py-3 text-sm text-gray-500">
+                                {{ org.intake_date }}
+                            </td>
+                            <td class="px-4 py-3 text-center">
+                                {% if org.ceo_status == 'complete' %}
+                                <i class="fas fa-check-circle text-green-500" title="Complete"></i>
+                                {% else %}
+                                <i class="fas fa-clock text-yellow-500" title="Pending"></i>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 text-center">
+                                {% if org.tech_status == 'complete' %}
+                                <i class="fas fa-check-circle text-green-500" title="Complete"></i>
+                                {% else %}
+                                <i class="fas fa-clock text-yellow-500" title="Pending"></i>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 text-center">
+                                {% if org.staff_status == 'complete' %}
+                                <i class="fas fa-check-circle text-green-500" title="Complete"></i>
+                                {% else %}
+                                <i class="fas fa-clock text-yellow-500" title="Pending"></i>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 text-center">
+                                {% if org.overall_status == 'complete' %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                    <i class="fas fa-check-circle mr-1"></i> Complete
+                                </span>
+                                {% elif org.overall_status == 'in_progress' %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                    <i class="fas fa-spinner mr-1"></i> In Progress
+                                </span>
+                                {% else %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                    <i class="fas fa-times-circle mr-1"></i> Not Started
+                                </span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Latest Activity Feed -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h3 class="text-xl font-semibold mb-4 text-gray-800">
+                <i class="fas fa-stream mr-2 text-survey-orange"></i>
+                Latest Activity
+            </h3>
+
+            <div class="space-y-3">
+                {% for activity in dashboard.activity %}
+                <div class="flex items-start border-l-4
+                    {% if activity.activity_type == 'CEO Survey' %}border-blue-500
+                    {% elif activity.activity_type == 'Tech Survey' %}border-purple-500
+                    {% elif activity.activity_type == 'Staff Survey' %}border-green-500
+                    {% else %}border-gray-400{% endif %}
+                    bg-gray-50 p-3 rounded-r">
+                    <div class="flex-1">
+                        <div class="flex items-center justify-between">
+                            <a href="/org/{{ activity.organization }}" class="text-sm font-semibold text-survey-blue hover:underline">
+                                {{ activity.organization }}
+                            </a>
+                            <span class="text-xs text-gray-500">{{ activity.timestamp }}</span>
+                        </div>
+                        <p class="text-sm text-gray-600 mt-1">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
+                                {% if activity.activity_type == 'CEO Survey' %}bg-blue-100 text-blue-800
+                                {% elif activity.activity_type == 'Tech Survey' %}bg-purple-100 text-purple-800
+                                {% elif activity.activity_type == 'Staff Survey' %}bg-green-100 text-green-800
+                                {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                {{ activity.activity_type }}
+                            </span>
+                            <span class="ml-2">{{ activity.activity_description }}</span>
+                        </p>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <!-- No Data Message -->
+    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+        <div class="flex items-center">
+            <i class="fas fa-info-circle text-yellow-500 text-2xl mr-4"></i>
+            <div>
+                <h3 class="text-lg font-semibold text-yellow-800 mb-1">No Data Available</h3>
+                <p class="text-sm text-yellow-700">Please visit the <a href="/admin" class="underline font-medium">Admin page</a> to extract data from Google Sheets.</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

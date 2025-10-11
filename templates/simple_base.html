@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}JJF Survey Analytics{% endblock %}</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Custom Tailwind Config -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'survey-blue': '#1e40af',
+                        'survey-green': '#059669',
+                        'survey-purple': '#7c3aed',
+                        'survey-orange': '#ea580c'
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .hover-scale {
+            transition: transform 0.2s ease-in-out;
+        }
+
+        .hover-scale:hover {
+            transform: scale(1.02);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-lg border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <i class="fas fa-chart-bar text-2xl text-survey-blue mr-3"></i>
+                    <h1 class="text-xl font-bold text-gray-900">
+                        <a href="/" class="hover:text-survey-blue transition-colors">
+                            JJF Survey Analytics
+                        </a>
+                    </h1>
+
+                    <!-- Navigation Links -->
+                    <div class="hidden md:ml-10 md:flex md:space-x-8">
+                        <a href="/"
+                           class="{% if request.endpoint == 'home' %}text-survey-blue border-b-2 border-survey-blue{% else %}text-gray-500 hover:text-gray-700{% endif %} px-3 py-2 text-sm font-medium transition-colors">
+                            <i class="fas fa-home mr-2"></i>Home
+                        </a>
+                        <a href="/data"
+                           class="{% if request.endpoint in ['data_nav', 'view_tab'] %}text-survey-blue border-b-2 border-survey-blue{% else %}text-gray-500 hover:text-gray-700{% endif %} px-3 py-2 text-sm font-medium transition-colors">
+                            <i class="fas fa-table mr-2"></i>Data
+                        </a>
+                        <a href="/report/aggregate"
+                           class="{% if request.endpoint in ['aggregate_report', 'organization_report'] %}text-survey-blue border-b-2 border-survey-blue{% else %}text-gray-500 hover:text-gray-700{% endif %} px-3 py-2 text-sm font-medium transition-colors">
+                            <i class="fas fa-file-alt mr-2"></i>Reports
+                        </a>
+                        <a href="/admin"
+                           class="{% if request.endpoint == 'admin' %}text-survey-blue border-b-2 border-survey-blue{% else %}text-gray-500 hover:text-gray-700{% endif %} px-3 py-2 text-sm font-medium transition-colors">
+                            <i class="fas fa-cog mr-2"></i>Admin
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+        <div class="fade-in">
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-gray-200 mt-12">
+        <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center">
+                <div class="text-sm text-gray-500">
+                    <i class="fas fa-database mr-2"></i>
+                    JJF Survey Analytics - Simple Edition
+                </div>
+                <div class="text-sm text-gray-500">
+                    <i class="fas fa-clock mr-2"></i>
+                    Last updated: <span id="current-time"></span>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Update current time
+        function updateTime() {
+            const now = new Date();
+            const timeString = now.toLocaleString();
+            const timeElement = document.getElementById('current-time');
+            if (timeElement) {
+                timeElement.textContent = timeString;
+            }
+        }
+
+        updateTime();
+        setInterval(updateTime, 60000); // Update every minute
+    </script>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>
