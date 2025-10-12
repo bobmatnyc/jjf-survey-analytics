@@ -492,6 +492,11 @@ def get_organizations_summary() -> List[Dict[str, Any]]:
     Get detailed organization data from master list with intake information.
 
     Shows ALL organizations from OrgMaster list with their response status.
+
+    Email Resolution:
+    - Uses email from Intake sheet if organization has responded
+    - Falls back to email from OrgMaster sheet if organization hasn't responded
+    - Provides maximum email coverage for all organizations
     """
     org_master = get_tab_data('OrgMaster')
     intake_data = get_tab_data('Intake')
@@ -538,9 +543,17 @@ def get_organizations_summary() -> List[Dict[str, Any]]:
         else:
             status = 'Intake Only'
 
+        # Determine email: use intake email if available, otherwise use OrgMaster email
+        email = ''
+        if intake_record and intake_record.get('Email', '').strip():
+            email = intake_record.get('Email', '').strip()
+        else:
+            # Use email from OrgMaster for organizations that haven't responded
+            email = row.get('Email', '').strip()
+
         organizations.append({
             'organization': org_name,
-            'email': intake_record.get('Email', '') if intake_record else '',
+            'email': email,
             'submitted_date': format_date(intake_record.get('Date', '')) if intake_record else 'Not Submitted',
             'status': status,
             'has_intake': has_intake,
