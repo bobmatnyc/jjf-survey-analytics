@@ -771,6 +771,88 @@ def health_check():
         }), 500
 
 
+@app.route('/org/<org_name>')
+def organization_detail(org_name):
+    """
+    Display organization detail page with survey status and contacts.
+
+    Shows organization overview, contact information, and survey completion status.
+    """
+    try:
+        if not SHEET_DATA:
+            return render_template('error.html',
+                                 error="Data not loaded. Please refresh data first."), 503
+
+        # Get intake record for organization
+        intake_data = get_tab_data('Intake')
+        intake_record = next((r for r in intake_data if r.get('Organization') == org_name), None)
+
+        # Get survey data for completion calculation
+        ceo_data = get_tab_data('CEO')
+        tech_data = get_tab_data('Tech')
+        staff_data = get_tab_data('Staff')
+
+        # Check survey completion status
+        ceo_complete = any(r.get('Organization') == org_name for r in ceo_data)
+        tech_complete = any(r.get('Organization') == org_name for r in tech_data)
+        staff_complete = any(r.get('Organization') == org_name for r in staff_data)
+
+        # Calculate completion metrics
+        completed_surveys = sum([ceo_complete, tech_complete, staff_complete])
+        total_surveys = 3
+        completion_pct = int((completed_surveys / total_surveys) * 100)
+
+        # Build contacts list from intake record
+        contacts = []
+        if intake_record:
+            # CEO contact
+            ceo_email = intake_record.get('Email Address')
+            if ceo_email:
+                contacts.append({
+                    'type': 'CEO',
+                    'role': 'CEO',
+                    'email': ceo_email,
+                    'name': intake_record.get('First Name', '') + ' ' + intake_record.get('Last Name', ''),
+                    'has_survey': ceo_complete
+                })
+
+            # Tech Lead contact
+            tech_email = intake_record.get('Tech Lead Email')
+            if tech_email:
+                contacts.append({
+                    'type': 'Tech Lead',
+                    'role': 'Technology Lead',
+                    'email': tech_email,
+                    'name': intake_record.get('Tech Lead Name', 'Tech Lead'),
+                    'has_survey': tech_complete
+                })
+
+            # Staff contacts (if we have staff email field in intake)
+            staff_email = intake_record.get('Staff Email')
+            if staff_email:
+                contacts.append({
+                    'type': 'Staff',
+                    'role': 'Staff Member',
+                    'email': staff_email,
+                    'name': intake_record.get('Staff Name', 'Staff'),
+                    'has_survey': staff_complete
+                })
+
+        return render_template('organization_detail.html',
+                             org_name=org_name,
+                             intake_record=intake_record,
+                             completion_pct=completion_pct,
+                             completed_surveys=completed_surveys,
+                             total_surveys=total_surveys,
+                             contacts=contacts)
+
+    except Exception as e:
+        print(f"Error loading organization detail for {org_name}: {e}")
+        import traceback
+        traceback.print_exc()
+        return render_template('error.html', error=str(e)), 500
+
+
 @app.route('/report/<org_name>')
 def organization_report(org_name):
     """
