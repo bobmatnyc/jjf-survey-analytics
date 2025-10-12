@@ -18,6 +18,16 @@ app.secret_key = os.getenv('SECRET_KEY', 'simple-dev-key-change-in-production')
 # Global in-memory data storage
 SHEET_DATA: Dict[str, List[Dict[str, Any]]] = {}
 
+# LLM Report Cache
+# Cache structure: {
+#   'org_reports': {'org_name': {'report': {...}, 'response_count': 3}},
+#   'aggregate_report': {'report': {...}, 'total_responses': 22}
+# }
+REPORT_CACHE: Dict[str, Any] = {
+    'org_reports': {},
+    'aggregate_report': None
+}
+
 
 def load_sheet_data(verbose: bool = False) -> Dict[str, Any]:
     """Load data from Google Sheets into memory."""
@@ -29,6 +39,111 @@ def load_sheet_data(verbose: bool = False) -> Dict[str, Any]:
 def get_tab_data(tab_name: str) -> List[Dict[str, Any]]:
     """Get data for a specific tab."""
     return SHEET_DATA.get(tab_name, [])
+
+
+def get_org_response_count(org_name: str) -> int:
+    """
+    Count total survey responses for an organization.
+
+    Args:
+        org_name: Organization name
+
+    Returns:
+        Count of completed surveys (CEO + Tech + Staff)
+    """
+    ceo_data = get_tab_data('CEO')
+    tech_data = get_tab_data('Tech')
+    staff_data = get_tab_data('Staff')
+
+    count = 0
+    if any(r.get('Organization') == org_name or r.get('CEO Organization') == org_name for r in ceo_data):
+        count += 1
+    if any(r.get('Organization') == org_name for r in tech_data):
+        count += 1
+    if any(r.get('Organization') == org_name for r in staff_data):
+        count += 1
+
+    return count
+
+
+def get_total_response_count() -> int:
+    """
+    Count total survey responses across all organizations.
+
+    Returns:
+        Total count of all survey responses
+    """
+    ceo_count = len([r for r in get_tab_data('CEO') if r.get('Organization') or r.get('CEO Organization')])
+    tech_count = len([r for r in get_tab_data('Tech') if r.get('Organization')])
+    staff_count = len([r for r in get_tab_data('Staff') if r.get('Organization')])
+
+    return ceo_count + tech_count + staff_count
+
+
+def is_org_report_cached(org_name: str) -> bool:
+    """
+    Check if organization report is cached and valid.
+
+    Args:
+        org_name: Organization name
+
+    Returns:
+        True if cached report exists and response count matches
+    """
+    if org_name not in REPORT_CACHE['org_reports']:
+        return False
+
+    cached = REPORT_CACHE['org_reports'][org_name]
+    current_count = get_org_response_count(org_name)
+
+    return cached.get('response_count') == current_count
+
+
+def is_aggregate_report_cached() -> bool:
+    """
+    Check if aggregate report is cached and valid.
+
+    Returns:
+        True if cached report exists and total response count matches
+    """
+    if REPORT_CACHE['aggregate_report'] is None:
+        return False
+
+    cached = REPORT_CACHE['aggregate_report']
+    current_count = get_total_response_count()
+
+    return cached.get('total_responses') == current_count
+
+
+def cache_org_report(org_name: str, report: Dict[str, Any]) -> None:
+    """
+    Cache an organization report with current response count.
+
+    Args:
+        org_name: Organization name
+        report: Generated report data
+    """
+    REPORT_CACHE['org_reports'][org_name] = {
+        'report': report,
+        'response_count': get_org_response_count(org_name),
+        'cached_at': datetime.now().isoformat()
+    }
+    print(f"[Cache] Cached report for {org_name} (responses: {get_org_response_count(org_name)})")
+
+
+def cache_aggregate_report(report: Dict[str, Any]) -> None:
+    """
+    Cache aggregate report with current total response count.
+
+    Args:
+        report: Generated report data
+    """
+    REPORT_CACHE['aggregate_report'] = {
+        'report': report,
+        'total_responses': get_total_response_count(),
+        'cached_at': datetime.now().isoformat()
+    }
+    print(f"[Cache] Cached aggregate report (total responses: {get_total_response_count()})")
 
 
 def get_participation_overview() -> Dict[str, Any]:
@@ -704,15 +819,21 @@ def summary_complete():
 
 @app.route('/api/refresh', methods=['GET', 'POST'])
 def api_refresh():
-    """Refresh data from Google Sheets."""
+    """Refresh data from Google Sheets and clear report cache."""
     try:
         load_sheet_data(verbose=True)
         stats = get_stats()
 
+        # Clear report cache when data is refreshed
+        REPORT_CACHE['org_reports'].clear()
+        REPORT_CACHE['aggregate_report'] = None
+        print("[Cache] Cleared all cached reports after data refresh")
+
         return jsonify({
             'success': True,
             'message': 'Data refreshed successfully from Google Sheets',
-            'stats': stats
+            'stats': stats,
+            'cache_cleared': True
         })
 
     except Exception as e:
@@ -737,6 +858,59 @@ def api_stats():
         }), 404
 
     return jsonify(get_stats())
+
+
+@app.route('/api/cache/status')
+def cache_status():
+    """Get report cache status for monitoring."""
+    org_reports_cached = list(REPORT_CACHE['org_reports'].keys())
+    aggregate_cached = REPORT_CACHE['aggregate_report'] is not None
+
+    cache_info = {
+        'organization_reports': {
+            'count': len(org_reports_cached),
+            'organizations': []
+        },
+        'aggregate_report': {
+            'cached': aggregate_cached
+        }
+    }
+
+    # Add details for each cached org report
+    for org_name in org_reports_cached:
+        cache_data = REPORT_CACHE['org_reports'][org_name]
+        cache_info['organization_reports']['organizations'].append({
+            'name': org_name,
+            'response_count': cache_data.get('response_count'),
+            'cached_at': cache_data.get('cached_at'),
+            'current_count': get_org_response_count(org_name),
+            'valid': is_org_report_cached(org_name)
+        })
+
+    # Add details for aggregate report
+    if aggregate_cached:
+        agg_data = REPORT_CACHE['aggregate_report']
+        cache_info['aggregate_report'].update({
+            'total_responses': agg_data.get('total_responses'),
+            'cached_at': agg_data.get('cached_at'),
+            'current_total': get_total_response_count(),
+            'valid': is_aggregate_report_cached()
+        })
+
+    return jsonify(cache_info)
+
+
+@app.route('/api/cache/clear', methods=['POST'])
+def clear_cache():
+    """Manually clear the report cache."""
+    REPORT_CACHE['org_reports'].clear()
+    REPORT_CACHE['aggregate_report'] = None
+    print("[Cache] Manually cleared all cached reports")
+
+    return jsonify({
+        'success': True,
+        'message': 'Report cache cleared successfully'
+    })
 
 
 @app.route('/health')
@@ -862,11 +1036,23 @@ def organization_report(org_name):
     - Quantitative maturity scores across technology dimensions
     - Qualitative AI analysis of free text responses
     - Score modifiers based on contextual insights
+
+    Implements intelligent caching: Report cached based on response count.
+    Cache invalidates automatically when new responses are added.
     """
     try:
         if not SHEET_DATA:
             return render_template('error.html',
                                  error="Data not loaded. Please refresh data first."), 503
+
+        # Check cache first
+        if is_org_report_cached(org_name):
+            print(f"[Cache HIT] Using cached report for {org_name}")
+            report = REPORT_CACHE['org_reports'][org_name]['report']
+            return render_template('organization_report.html', report=report, org_name=org_name)
+
+        # Cache miss - generate new report
+        print(f"[Cache MISS] Generating new report for {org_name}")
 
         # Initialize report generator with AI enabled
         generator = ReportGenerator(SHEET_DATA, enable_ai=True)
@@ -877,6 +1063,9 @@ def organization_report(org_name):
         if not report:
             return render_template('error.html',
                                  error=f"No data found for organization: {org_name}"), 404
+
+        # Cache the generated report
+        cache_org_report(org_name, report)
 
         return render_template('organization_report.html', report=report, org_name=org_name)
 
@@ -894,11 +1083,23 @@ def aggregate_report():
 
     Provides comprehensive maturity assessment aggregated across
     all surveyed organizations with comparative analytics.
+
+    Implements intelligent caching: Report cached based on total response count.
+    Cache invalidates automatically when any new response is added.
     """
     try:
         if not SHEET_DATA:
             return render_template('error.html',
                                  error="Data not loaded. Please refresh data first."), 503
+
+        # Check cache first
+        if is_aggregate_report_cached():
+            print(f"[Cache HIT] Using cached aggregate report")
+            report = REPORT_CACHE['aggregate_report']['report']
+            return render_template('aggregate_report.html', report=report)
+
+        # Cache miss - generate new report
+        print(f"[Cache MISS] Generating new aggregate report")
 
         # Initialize report generator with AI enabled
         generator = ReportGenerator(SHEET_DATA, enable_ai=True)
@@ -909,6 +1110,9 @@ def aggregate_report():
         if not report:
             return render_template('error.html',
                                  error="Unable to generate aggregate report"), 500
+
+        # Cache the generated report
+        cache_aggregate_report(report)
 
         return render_template('aggregate_report.html', report=report)
 
