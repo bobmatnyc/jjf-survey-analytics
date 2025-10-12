@@ -1,6 +1,7 @@
 .PHONY: help install test lint format clean setup init extract status
 .PHONY: dev build deploy quality test-cov health sync normalize
 .PHONY: lint-fix format-check typecheck all-checks pre-deploy
+.PHONY: version version-bump version-patch version-minor version-major version-build
 
 # =============================================================================
 # JJF Survey Analytics Platform - Makefile
@@ -48,6 +49,13 @@ help:
 	@echo ""
 	@echo "📊 SERVICES"
 	@echo "  make sync         - Force manual data sync"
+	@echo ""
+	@echo "🏷️  VERSION MANAGEMENT"
+	@echo "  make version        - Display current version information"
+	@echo "  make version-patch  - Bump patch version (1.0.0 → 1.0.1)"
+	@echo "  make version-minor  - Bump minor version (1.0.0 → 1.1.0)"
+	@echo "  make version-major  - Bump major version (1.0.0 → 2.0.0)"
+	@echo "  make version-build  - Update build metadata only"
 	@echo ""
 	@echo "📚 DOCUMENTATION"
 	@echo "  See CLAUDE.md for comprehensive AI agent instructions"
@@ -251,3 +259,51 @@ clean:
 #   3. Railway auto-deploys
 #
 # See CLAUDE.md and DEPLOYMENT_GUIDE.md for details
+
+# =============================================================================
+# VERSION MANAGEMENT & BUILD TRACKING
+# =============================================================================
+
+# Display current version information
+version:
+	@echo "📋 Version Information"
+	@python3 version.py
+
+# Update build metadata only (no version bump)
+version-build:
+	@echo "🔨 Updating build metadata..."
+	@python3 scripts/update_version.py build
+	@echo "✅ Build metadata updated!"
+
+# Bump patch version (1.0.0 → 1.0.1)
+version-patch:
+	@echo "⬆️  Bumping patch version..."
+	@python3 scripts/update_version.py patch
+	@echo "✅ Version bumped!"
+	@echo ""
+	@echo "📝 Next steps:"
+	@echo "  1. Review changes: git diff version.py"
+	@echo "  2. Commit: git add version.py && git commit -m 'chore: bump version'"
+	@echo "  3. Push: git push origin main"
+
+# Bump minor version (1.0.0 → 1.1.0)
+version-minor:
+	@echo "⬆️  Bumping minor version..."
+	@python3 scripts/update_version.py minor
+	@echo "✅ Version bumped!"
+	@echo ""
+	@echo "📝 Next steps:"
+	@echo "  1. Review changes: git diff version.py"
+	@echo "  2. Commit: git add version.py && git commit -m 'chore: bump version'"
+	@echo "  3. Push: git push origin main"
+
+# Bump major version (1.0.0 → 2.0.0)
+version-major:
+	@echo "⬆️  Bumping major version..."
+	@python3 scripts/update_version.py major
+	@echo "✅ Version bumped!"
+	@echo ""
+	@echo "📝 Next steps:"
+	@echo "  1. Review changes: git diff version.py"
+	@echo "  2. Commit: git add version.py && git commit -m 'chore: bump version'"
+	@echo "  3. Push: git push origin main"

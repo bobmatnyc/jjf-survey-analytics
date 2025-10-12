@@ -11,6 +11,7 @@ from sheets_reader import SheetsReader
 from typing import Dict, List, Any
 from report_generator import ReportGenerator
 from ai_analyzer import extract_free_text_responses
+from version import get_version_string, get_version_info
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'simple-dev-key-change-in-production')
@@ -1276,6 +1277,14 @@ except Exception as e:
 
 
 if __name__ == '__main__':
+    # Display version information
+    version_info = get_version_info()
+    print("\n" + "=" * 60)
+    print(f"JJF Survey Analytics Platform {get_version_string()}")
+    if version_info.get('git_branch'):
+        print(f"Branch: {version_info['git_branch']}")
+    print("=" * 60 + "\n")
+
     port = int(os.getenv('PORT', 8080))
     debug = os.getenv('FLASK_ENV') == 'development' or True
     app.run(host='0.0.0.0', port=port, debug=debug)
