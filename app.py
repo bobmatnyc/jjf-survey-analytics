@@ -146,6 +146,72 @@ def cache_aggregate_report(report: Dict[str, Any]) -> None:
     print(f"[Cache] Cached aggregate report (total responses: {get_total_response_count()})")
 
 
+def get_response_rates() -> Dict[str, Any]:
+    """
+    Calculate response rates using the master organization list.
+
+    Maps organizations from OrgMaster (using 'Organization' field) to
+    Intake data (using 'Organization Name:' field) to calculate
+    outreach vs response rates.
+
+    Returns:
+        Dictionary with response rate metrics and org-level details
+    """
+    org_master = get_tab_data('OrgMaster')
+    intake_data = get_tab_data('Intake')
+    ceo_data = get_tab_data('CEO')
+    tech_data = get_tab_data('Tech')
+    staff_data = get_tab_data('Staff')
+
+    # Get all organizations from master list
+    master_orgs = {row.get('Organization', '').strip()
+                   for row in org_master
+                   if row.get('Organization', '').strip()}
+
+    # Get organizations that responded to intake
+    intake_orgs = {row.get('Organization Name:', '').strip()
+                   for row in intake_data
+                   if row.get('Organization Name:', '').strip()}
+
+    # Get organizations with CEO responses
+    ceo_orgs = {row.get('CEO Organization', '').strip()
+                for row in ceo_data
+                if row.get('CEO Organization', '').strip()}
+
+    # Get organizations with Tech responses
+    tech_orgs = {row.get('Organization', '').strip()
+                 for row in tech_data
+                 if row.get('Organization', '').strip()}
+
+    # Get organizations with Staff responses
+    staff_orgs = {row.get('Organization', '').strip()
+                  for row in staff_data
+                  if row.get('Organization', '').strip()}
+
+    # Calculate metrics
+    total_outreach = len(master_orgs)
+    total_responded = len(intake_orgs)
+    intake_response_rate = (total_responded / total_outreach * 100) if total_outreach > 0 else 0
+
+    # Survey completion metrics
+    ceo_responses = len(ceo_orgs)
+    tech_responses = len(tech_orgs)
+    staff_responses = len(staff_orgs)
+
+    return {
+        'total_outreach': total_outreach,
+        'total_responded': total_responded,
+        'not_responded': total_outreach - total_responded,
+        'intake_response_rate': round(intake_response_rate, 1),
+        'ceo_responses': ceo_responses,
+        'tech_responses': tech_responses,
+        'staff_responses': staff_responses,
+        'master_orgs': sorted(master_orgs),
+        'responded_orgs': sorted(intake_orgs),
+        'not_responded_orgs': sorted(master_orgs - intake_orgs)
+    }
+
+
 def get_participation_overview() -> Dict[str, Any]:
     """Get aggregate participation metrics for dashboard."""
     intake_data = get_tab_data('Intake')
@@ -366,7 +432,7 @@ def get_funnel_data() -> Dict[str, Any]:
 
 
 def get_stats() -> Dict[str, Any]:
-    """Get basic statistics about loaded data."""
+    """Get basic statistics about loaded data including response rates."""
     metadata = SHEET_DATA.get('_metadata', {})
 
     tabs_stats = []
@@ -378,12 +444,24 @@ def get_stats() -> Dict[str, Any]:
             'last_extract': metadata.get('last_fetch', '')
         })
 
-    return {
+    # Include response rates from master list
+    try:
+        response_rates = get_response_rates()
+    except Exception as e:
+        print(f"Error calculating response rates: {e}")
+        response_rates = None
+
+    stats = {
         'tabs': tabs_stats,
         'total_rows': metadata.get('total_rows', 0),
         'last_fetch': metadata.get('last_fetch', ''),
         'spreadsheet_id': metadata.get('spreadsheet_id', '')
     }
+
+    if response_rates:
+        stats['response_rates'] = response_rates
+
+    return stats
 
 
 def format_date(date_str: str) -> str:
@@ -858,6 +936,23 @@ def api_stats():
         }), 404
 
     return jsonify(get_stats())
+
+
+@app.route('/api/response-rates')
+def api_response_rates():
+    """Get detailed response rate analysis using master organization list."""
+    if not SHEET_DATA or '_metadata' not in SHEET_DATA:
+        return jsonify({
+            'error': 'Data not loaded'
+        }), 404
+
+    try:
+        response_rates = get_response_rates()
+        return jsonify(response_rates)
+    except Exception as e:
+        return jsonify({
+            'error': str(e)
+        }), 500
 
 
 @app.route('/api/cache/status')
