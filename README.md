@@ -302,6 +302,40 @@ LOG_LEVEL=INFO
 AUTO_SYNC_INTERVAL=300  # seconds
 ```
 
+### **Version Management**
+
+The project includes a comprehensive Make-based version management system:
+
+```bash
+# Display current version information
+make version
+
+# Bump patch version (1.0.0 → 1.0.1) - bug fixes
+make version-patch
+
+# Bump minor version (1.0.0 → 1.1.0) - new features
+make version-minor
+
+# Bump major version (1.0.0 → 2.0.0) - breaking changes
+make version-major
+
+# Update build metadata only (no version bump)
+make version-build
+```
+
+**Features:**
+- Semantic versioning (major.minor.patch)
+- Automatic git metadata extraction (commit hash, branch name)
+- Build date and build number tracking
+- Version displayed at application startup
+
+**Workflow:**
+1. Make changes to the codebase
+2. Run `make version-patch` (or minor/major as appropriate)
+3. Review changes: `git diff version.py`
+4. Commit: `git add version.py && git commit -m "chore: bump version"`
+5. Push: `git push origin main`
+
 ## 📊 **API Endpoints**
 
 ### **Web Routes**

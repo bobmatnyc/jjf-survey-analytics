@@ -1,7 +1,7 @@
 # CLAUDE.md - AI Agent Instructions
 
 **Project:** JJF Survey Analytics Platform
-**Last Updated:** 2025-10-09
+**Last Updated:** 2025-10-12
 **Version:** 1.0.0
 
 > This file provides comprehensive instructions for Claude Code and other AI agents working on this project. All operations follow the "ONE way to do ANYTHING" principle.
@@ -119,6 +119,28 @@ make format
 # Run tests with coverage
 make test-cov
 ```
+
+### Version Management
+```bash
+# Display current version information
+make version
+
+# Bump patch version (1.0.0 → 1.0.1)
+make version-patch
+
+# Bump minor version (1.0.0 → 1.1.0)
+make version-minor
+
+# Bump major version (1.0.0 → 2.0.0)
+make version-major
+
+# Update build metadata only (no version bump)
+make version-build
+```
+- Semantic versioning (major.minor.patch)
+- Automatic git metadata extraction (commit hash, branch)
+- Version displayed at application startup
+- After bumping: review changes, commit, and push
 
 ---
 
