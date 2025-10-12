@@ -18,16 +18,6 @@ app.secret_key = os.getenv('SECRET_KEY', 'simple-dev-key-change-in-production')
 # Global in-memory data storage
 SHEET_DATA: Dict[str, List[Dict[str, Any]]] = {}
 
-# LLM Report Cache
-# Cache structure: {
-#   'org_reports': {'org_name': {'report': {...}, 'response_count': 3}},
-#   'aggregate_report': {'report': {...}, 'total_responses': 22}
-# }
-REPORT_CACHE: Dict[str, Any] = {
-    'org_reports': {},
-    'aggregate_report': None
-}
-
 
 def load_sheet_data(verbose: bool = False) -> Dict[str, Any]:
     """Load data from Google Sheets into memory."""
@@ -39,177 +29,6 @@ def load_sheet_data(verbose: bool = False) -> Dict[str, Any]:
 def get_tab_data(tab_name: str) -> List[Dict[str, Any]]:
     """Get data for a specific tab."""
     return SHEET_DATA.get(tab_name, [])
-
-
-def get_org_response_count(org_name: str) -> int:
-    """
-    Count total survey responses for an organization.
-
-    Args:
-        org_name: Organization name
-
-    Returns:
-        Count of completed surveys (CEO + Tech + Staff)
-    """
-    ceo_data = get_tab_data('CEO')
-    tech_data = get_tab_data('Tech')
-    staff_data = get_tab_data('Staff')
-
-    count = 0
-    if any(r.get('Organization') == org_name or r.get('CEO Organization') == org_name for r in ceo_data):
-        count += 1
-    if any(r.get('Organization') == org_name for r in tech_data):
-        count += 1
-    if any(r.get('Organization') == org_name for r in staff_data):
-        count += 1
-
-    return count
-
-
-def get_total_response_count() -> int:
-    """
-    Count total survey responses across all organizations.
-
-    Returns:
-        Total count of all survey responses
-    """
-    ceo_count = len([r for r in get_tab_data('CEO') if r.get('Organization') or r.get('CEO Organization')])
-    tech_count = len([r for r in get_tab_data('Tech') if r.get('Organization')])
-    staff_count = len([r for r in get_tab_data('Staff') if r.get('Organization')])
-
-    return ceo_count + tech_count + staff_count
-
-
-def is_org_report_cached(org_name: str) -> bool:
-    """
-    Check if organization report is cached and valid.
-
-    Args:
-        org_name: Organization name
-
-    Returns:
-        True if cached report exists and response count matches
-    """
-    if org_name not in REPORT_CACHE['org_reports']:
-        return False
-
-    cached = REPORT_CACHE['org_reports'][org_name]
-    current_count = get_org_response_count(org_name)
-
-    return cached.get('response_count') == current_count
-
-
-def is_aggregate_report_cached() -> bool:
-    """
-    Check if aggregate report is cached and valid.
-
-    Returns:
-        True if cached report exists and total response count matches
-    """
-    if REPORT_CACHE['aggregate_report'] is None:
-        return False
-
-    cached = REPORT_CACHE['aggregate_report']
-    current_count = get_total_response_count()
-
-    return cached.get('total_responses') == current_count
-
-
-def cache_org_report(org_name: str, report: Dict[str, Any]) -> None:
-    """
-    Cache an organization report with current response count.
-
-    Args:
-        org_name: Organization name
-        report: Generated report data
-    """
-    REPORT_CACHE['org_reports'][org_name] = {
-        'report': report,
-        'response_count': get_org_response_count(org_name),
-        'cached_at': datetime.now().isoformat()
-    }
-    print(f"[Cache] Cached report for {org_name} (responses: {get_org_response_count(org_name)})")
-
-
-def cache_aggregate_report(report: Dict[str, Any]) -> None:
-    """
-    Cache aggregate report with current total response count.
-
-    Args:
-        report: Generated report data
-    """
-    REPORT_CACHE['aggregate_report'] = {
-        'report': report,
-        'total_responses': get_total_response_count(),
-        'cached_at': datetime.now().isoformat()
-    }
-    print(f"[Cache] Cached aggregate report (total responses: {get_total_response_count()})")
-
-
-def get_response_rates() -> Dict[str, Any]:
-    """
-    Calculate response rates using the master organization list.
-
-    Maps organizations from OrgMaster (using 'Organization' field) to
-    Intake data (using 'Organization Name:' field) to calculate
-    outreach vs response rates.
-
-    Returns:
-        Dictionary with response rate metrics and org-level details
-    """
-    org_master = get_tab_data('OrgMaster')
-    intake_data = get_tab_data('Intake')
-    ceo_data = get_tab_data('CEO')
-    tech_data = get_tab_data('Tech')
-    staff_data = get_tab_data('Staff')
-
-    # Get all organizations from master list
-    master_orgs = {row.get('Organization', '').strip()
-                   for row in org_master
-                   if row.get('Organization', '').strip()}
-
-    # Get organizations that responded to intake
-    intake_orgs = {row.get('Organization Name:', '').strip()
-                   for row in intake_data
-                   if row.get('Organization Name:', '').strip()}
-
-    # Get organizations with CEO responses
-    ceo_orgs = {row.get('CEO Organization', '').strip()
-                for row in ceo_data
-                if row.get('CEO Organization', '').strip()}
-
-    # Get organizations with Tech responses
-    tech_orgs = {row.get('Organization', '').strip()
-                 for row in tech_data
-                 if row.get('Organization', '').strip()}
-
-    # Get organizations with Staff responses
-    staff_orgs = {row.get('Organization', '').strip()
-                  for row in staff_data
-                  if row.get('Organization', '').strip()}
-
-    # Calculate metrics
-    total_outreach = len(master_orgs)
-    total_responded = len(intake_orgs)
-    intake_response_rate = (total_responded / total_outreach * 100) if total_outreach > 0 else 0
-
-    # Survey completion metrics
-    ceo_responses = len(ceo_orgs)
-    tech_responses = len(tech_orgs)
-    staff_responses = len(staff_orgs)
-
-    return {
-        'total_outreach': total_outreach,
-        'total_responded': total_responded,
-        'not_responded': total_outreach - total_responded,
-        'intake_response_rate': round(intake_response_rate, 1),
-        'ceo_responses': ceo_responses,
-        'tech_responses': tech_responses,
-        'staff_responses': staff_responses,
-        'master_orgs': sorted(master_orgs),
-        'responded_orgs': sorted(intake_orgs),
-        'not_responded_orgs': sorted(master_orgs - intake_orgs)
-    }
 
 
 def get_participation_overview() -> Dict[str, Any]:
@@ -432,7 +251,7 @@ def get_funnel_data() -> Dict[str, Any]:
 
 
 def get_stats() -> Dict[str, Any]:
-    """Get basic statistics about loaded data including response rates."""
+    """Get basic statistics about loaded data."""
     metadata = SHEET_DATA.get('_metadata', {})
 
     tabs_stats = []
@@ -444,24 +263,12 @@ def get_stats() -> Dict[str, Any]:
             'last_extract': metadata.get('last_fetch', '')
         })
 
-    # Include response rates from master list
-    try:
-        response_rates = get_response_rates()
-    except Exception as e:
-        print(f"Error calculating response rates: {e}")
-        response_rates = None
-
-    stats = {
+    return {
         'tabs': tabs_stats,
         'total_rows': metadata.get('total_rows', 0),
         'last_fetch': metadata.get('last_fetch', ''),
         'spreadsheet_id': metadata.get('spreadsheet_id', '')
     }
-
-    if response_rates:
-        stats['response_rates'] = response_rates
-
-    return stats
 
 
 def format_date(date_str: str) -> str:
@@ -488,73 +295,39 @@ def truncate_text(text: str, max_length: int = 100) -> str:
 
 
 def get_organizations_summary() -> List[Dict[str, Any]]:
-    """
-    Get detailed organization data from master list with intake information.
-
-    Shows ALL organizations from OrgMaster list with their response status.
-    """
-    org_master = get_tab_data('OrgMaster')
+    """Get detailed organization data with intake information."""
     intake_data = get_tab_data('Intake')
     ceo_data = get_tab_data('CEO')
     tech_data = get_tab_data('Tech')
     staff_data = get_tab_data('Staff')
 
-    # Create lookup dictionaries for intake data
-    intake_lookup = {}
-    for row in intake_data:
-        org_name = row.get('Organization Name:', '').strip()
-        if org_name:
-            intake_lookup[org_name] = row
-
-    # Create lookup sets for survey responses
+    # Create lookup sets
     ceo_orgs = {row.get('CEO Organization', '').strip() for row in ceo_data if row.get('CEO Organization', '').strip()}
     tech_orgs = {row.get('Organization', '').strip() for row in tech_data if row.get('Organization', '').strip()}
     staff_orgs = {row.get('Organization', '').strip() for row in staff_data if row.get('Organization', '').strip()}
 
     organizations = []
-
-    # Iterate through ALL organizations in master list
-    for row in org_master:
-        org_name = row.get('Organization', '').strip()
+    for row in intake_data:
+        org_name = row.get('Organization Name:', '').strip()
         if not org_name:
             continue
 
-        # Check if this org submitted intake
-        intake_record = intake_lookup.get(org_name)
-        has_intake = intake_record is not None
-
-        # Check survey completions
         has_ceo = org_name in ceo_orgs
         has_tech = org_name in tech_orgs
         has_staff = org_name in staff_orgs
 
-        # Determine overall status
-        if not has_intake:
-            status = 'No Response'
-        elif has_ceo and has_tech and has_staff:
-            status = 'Complete'
-        elif has_ceo or has_tech or has_staff:
-            status = 'In Progress'
-        else:
-            status = 'Intake Only'
-
         organizations.append({
             'organization': org_name,
-            'email': intake_record.get('Email', '') if intake_record else '',
-            'submitted_date': format_date(intake_record.get('Date', '')) if intake_record else 'Not Submitted',
-            'status': status,
-            'has_intake': has_intake,
+            'email': row.get('Email', ''),
+            'submitted_date': format_date(row.get('Date', '')),
+            'status': 'Complete' if (has_ceo and has_tech and has_staff) else 'In Progress' if has_ceo else 'Not Started',
             'ceo_complete': has_ceo,
             'tech_complete': has_tech,
             'staff_complete': has_staff
         })
 
-    # Sort: Responded first (by date), then not responded (alphabetically)
-    organizations.sort(key=lambda x: (
-        not x['has_intake'],  # Not responded goes to bottom
-        x['submitted_date'] if x['has_intake'] else x['organization']  # Date for responded, name for not
-    ))
-
+    # Sort by date descending
+    organizations.sort(key=lambda x: x['submitted_date'], reverse=True)
     return organizations
 
 
@@ -931,21 +704,15 @@ def summary_complete():
 
 @app.route('/api/refresh', methods=['GET', 'POST'])
 def api_refresh():
-    """Refresh data from Google Sheets and clear report cache."""
+    """Refresh data from Google Sheets."""
     try:
         load_sheet_data(verbose=True)
         stats = get_stats()
 
-        # Clear report cache when data is refreshed
-        REPORT_CACHE['org_reports'].clear()
-        REPORT_CACHE['aggregate_report'] = None
-        print("[Cache] Cleared all cached reports after data refresh")
-
         return jsonify({
             'success': True,
             'message': 'Data refreshed successfully from Google Sheets',
-            'stats': stats,
-            'cache_cleared': True
+            'stats': stats
         })
 
     except Exception as e:
@@ -972,190 +739,6 @@ def api_stats():
     return jsonify(get_stats())
 
 
-@app.route('/api/response-rates')
-def api_response_rates():
-    """Get detailed response rate analysis using master organization list."""
-    if not SHEET_DATA or '_metadata' not in SHEET_DATA:
-        return jsonify({
-            'error': 'Data not loaded'
-        }), 404
-
-    try:
-        response_rates = get_response_rates()
-        return jsonify(response_rates)
-    except Exception as e:
-        return jsonify({
-            'error': str(e)
-        }), 500
-
-
-@app.route('/api/cache/status')
-def cache_status():
-    """Get report cache status for monitoring."""
-    org_reports_cached = list(REPORT_CACHE['org_reports'].keys())
-    aggregate_cached = REPORT_CACHE['aggregate_report'] is not None
-
-    cache_info = {
-        'organization_reports': {
-            'count': len(org_reports_cached),
-            'organizations': []
-        },
-        'aggregate_report': {
-            'cached': aggregate_cached
-        }
-    }
-
-    # Add details for each cached org report
-    for org_name in org_reports_cached:
-        cache_data = REPORT_CACHE['org_reports'][org_name]
-        cache_info['organization_reports']['organizations'].append({
-            'name': org_name,
-            'response_count': cache_data.get('response_count'),
-            'cached_at': cache_data.get('cached_at'),
-            'current_count': get_org_response_count(org_name),
-            'valid': is_org_report_cached(org_name)
-        })
-
-    # Add details for aggregate report
-    if aggregate_cached:
-        agg_data = REPORT_CACHE['aggregate_report']
-        cache_info['aggregate_report'].update({
-            'total_responses': agg_data.get('total_responses'),
-            'cached_at': agg_data.get('cached_at'),
-            'current_total': get_total_response_count(),
-            'valid': is_aggregate_report_cached()
-        })
-
-    return jsonify(cache_info)
-
-
-@app.route('/api/cache/clear', methods=['POST'])
-def clear_cache():
-    """Manually clear the report cache."""
-    REPORT_CACHE['org_reports'].clear()
-    REPORT_CACHE['aggregate_report'] = None
-    print("[Cache] Manually cleared all cached reports")
-
-    return jsonify({
-        'success': True,
-        'message': 'Report cache cleared successfully'
-    })
-
-
-@app.route('/health')
-def health_check():
-    """Health check endpoint for Railway deployment."""
-    try:
-        # Check if data is loaded
-        data_loaded = bool(SHEET_DATA and '_metadata' in SHEET_DATA)
-
-        # Basic health status
-        health_status = {
-            'status': 'healthy' if data_loaded else 'degraded',
-            'data_loaded': data_loaded,
-            'app_version': 'simple-app-with-ai',
-            'checks': {
-                'sheet_data': 'ok' if data_loaded else 'no_data'
-            }
-        }
-
-        if data_loaded:
-            metadata = SHEET_DATA.get('_metadata', {})
-            health_status['last_fetch'] = metadata.get('last_fetch', 'unknown')
-            health_status['total_rows'] = metadata.get('total_rows', 0)
-
-        # Return 200 even if degraded - Railway just needs app to respond
-        return jsonify(health_status), 200
-
-    except Exception as e:
-        return jsonify({
-            'status': 'unhealthy',
-            'error': str(e)
-        }), 500
-
-
-@app.route('/org/<org_name>')
-def organization_detail(org_name):
-    """
-    Display organization detail page with survey status and contacts.
-
-    Shows organization overview, contact information, and survey completion status.
-    """
-    try:
-        if not SHEET_DATA:
-            return render_template('error.html',
-                                 error="Data not loaded. Please refresh data first."), 503
-
-        # Get intake record for organization
-        intake_data = get_tab_data('Intake')
-        intake_record = next((r for r in intake_data if r.get('Organization') == org_name), None)
-
-        # Get survey data for completion calculation
-        ceo_data = get_tab_data('CEO')
-        tech_data = get_tab_data('Tech')
-        staff_data = get_tab_data('Staff')
-
-        # Check survey completion status
-        ceo_complete = any(r.get('Organization') == org_name for r in ceo_data)
-        tech_complete = any(r.get('Organization') == org_name for r in tech_data)
-        staff_complete = any(r.get('Organization') == org_name for r in staff_data)
-
-        # Calculate completion metrics
-        completed_surveys = sum([ceo_complete, tech_complete, staff_complete])
-        total_surveys = 3
-        completion_pct = int((completed_surveys / total_surveys) * 100)
-
-        # Build contacts list from intake record
-        contacts = []
-        if intake_record:
-            # CEO contact
-            ceo_email = intake_record.get('Email Address')
-            if ceo_email:
-                contacts.append({
-                    'type': 'CEO',
-                    'role': 'CEO',
-                    'email': ceo_email,
-                    'name': intake_record.get('First Name', '') + ' ' + intake_record.get('Last Name', ''),
-                    'has_survey': ceo_complete
-                })
-
-            # Tech Lead contact
-            tech_email = intake_record.get('Tech Lead Email')
-            if tech_email:
-                contacts.append({
-                    'type': 'Tech Lead',
-                    'role': 'Technology Lead',
-                    'email': tech_email,
-                    'name': intake_record.get('Tech Lead Name', 'Tech Lead'),
-                    'has_survey': tech_complete
-                })
-
-            # Staff contacts (if we have staff email field in intake)
-            staff_email = intake_record.get('Staff Email')
-            if staff_email:
-                contacts.append({
-                    'type': 'Staff',
-                    'role': 'Staff Member',
-                    'email': staff_email,
-                    'name': intake_record.get('Staff Name', 'Staff'),
-                    'has_survey': staff_complete
-                })
-
-        return render_template('organization_detail.html',
-                             org_name=org_name,
-                             intake_record=intake_record,
-                             completion_pct=completion_pct,
-                             completed_surveys=completed_surveys,
-                             total_surveys=total_surveys,
-                             contacts=contacts)
-
-    except Exception as e:
-        print(f"Error loading organization detail for {org_name}: {e}")
-        import traceback
-        traceback.print_exc()
-        return render_template('error.html', error=str(e)), 500
-
-
 @app.route('/report/<org_name>')
 def organization_report(org_name):
     """
@@ -1165,23 +748,11 @@ def organization_report(org_name):
     - Quantitative maturity scores across technology dimensions
     - Qualitative AI analysis of free text responses
     - Score modifiers based on contextual insights
-
-    Implements intelligent caching: Report cached based on response count.
-    Cache invalidates automatically when new responses are added.
     """
     try:
         if not SHEET_DATA:
             return render_template('error.html',
                                  error="Data not loaded. Please refresh data first."), 503
-
-        # Check cache first
-        if is_org_report_cached(org_name):
-            print(f"[Cache HIT] Using cached report for {org_name}")
-            report = REPORT_CACHE['org_reports'][org_name]['report']
-            return render_template('organization_report.html', report=report, org_name=org_name)
-
-        # Cache miss - generate new report
-        print(f"[Cache MISS] Generating new report for {org_name}")
 
         # Initialize report generator with AI enabled
         generator = ReportGenerator(SHEET_DATA, enable_ai=True)
@@ -1193,60 +764,10 @@ def organization_report(org_name):
             return render_template('error.html',
                                  error=f"No data found for organization: {org_name}"), 404
 
-        # Cache the generated report
-        cache_org_report(org_name, report)
-
         return render_template('organization_report.html', report=report, org_name=org_name)
 
     except Exception as e:
         print(f"Error generating report for {org_name}: {e}")
-        import traceback
-        traceback.print_exc()
-        return render_template('error.html', error=str(e)), 500
-
-
-@app.route('/report/aggregate')
-def aggregate_report():
-    """
-    Generate aggregate report across all organizations.
-
-    Provides comprehensive maturity assessment aggregated across
-    all surveyed organizations with comparative analytics.
-
-    Implements intelligent caching: Report cached based on total response count.
-    Cache invalidates automatically when any new response is added.
-    """
-    try:
-        if not SHEET_DATA:
-            return render_template('error.html',
-                                 error="Data not loaded. Please refresh data first."), 503
-
-        # Check cache first
-        if is_aggregate_report_cached():
-            print(f"[Cache HIT] Using cached aggregate report")
-            report = REPORT_CACHE['aggregate_report']['report']
-            return render_template('aggregate_report.html', report=report)
-
-        # Cache miss - generate new report
-        print(f"[Cache MISS] Generating new aggregate report")
-
-        # Initialize report generator with AI enabled
-        generator = ReportGenerator(SHEET_DATA, enable_ai=True)
-
-        # Generate aggregate report across all organizations
-        report = generator.generate_aggregate_report()
-
-        if not report:
-            return render_template('error.html',
-                                 error="Unable to generate aggregate report"), 500
-
-        # Cache the generated report
-        cache_aggregate_report(report)
-
-        return render_template('aggregate_report.html', report=report)
-
-    except Exception as e:
-        print(f"Error generating aggregate report: {e}")
         import traceback
         traceback.print_exc()
         return render_template('error.html', error=str(e)), 500

@@ -15,6 +15,7 @@
 - [ARCHITECTURE.md](ARCHITECTURE.md) - System architecture details
 - [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) - Deployment procedures
 - [QUICK_REFERENCE.md](QUICK_REFERENCE.md) - Common commands
+- [docs/reference/PROJECT_ORGANIZATION.md](docs/reference/PROJECT_ORGANIZATION.md) - Project organization standards
 
 ---
 
@@ -167,6 +168,8 @@ surveyor status
 ---
 
 ## 🏗️ Project Architecture
+
+**IMPORTANT:** For complete organization standards and file placement rules, see [docs/reference/PROJECT_ORGANIZATION.md](docs/reference/PROJECT_ORGANIZATION.md)
 
 ### Directory Structure
 ```
