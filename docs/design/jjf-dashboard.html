@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Technology Maturity Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .dashboard {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 30px 40px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+        
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        
+        .organization-info {
+            background: #f8f9fa;
+            padding: 20px 40px;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .org-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+        
+        .org-stat {
+            text-align: center;
+        }
+        
+        .org-stat .label {
+            font-size: 0.9rem;
+            color: #6c757d;
+            margin-bottom: 5px;
+        }
+        
+        .org-stat .value {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        
+        .content {
+            padding: 40px;
+        }
+        
+        .maturity-overview {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 40px;
+            margin-bottom: 40px;
+        }
+        
+        .maturity-score {
+            text-align: center;
+            padding: 40px;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            border-radius: 20px;
+            color: white;
+        }
+        
+        .score-number {
+            font-size: 4rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .score-label {
+            font-size: 1.5rem;
+            margin-bottom: 15px;
+        }
+        
+        .score-description {
+            font-size: 1rem;
+            opacity: 0.9;
+            line-height: 1.5;
+        }
+        
+        .dimensions-chart {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+        }
+        
+        .thermometer-container {
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            margin-top: 20px;
+        }
+        
+        .thermometer-group {
+            display: flex;
+            gap: 40px;
+            align-items: flex-end;
+        }
+        
+        .thermometer-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 120px;
+        }
+        
+        .thermo-label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 15px;
+            text-align: center;
+            line-height: 1.3;
+        }
+        
+        .thermometer {
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            margin-bottom: 15px;
+        }
+        
+        .thermo-bar {
+            width: 45px;
+            height: 200px;
+            background: #f1f3f4;
+            border-radius: 22px;
+            position: relative;
+            overflow: hidden;
+            border: 3px solid #dee2e6;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .thermo-fill {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            border-radius: 0 0 18px 18px;
+            transition: height 1.5s ease-in-out;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 -2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .thermo-fill.building {
+            background: linear-gradient(to top, #e74c3c, #c0392b);
+        }
+        
+        .thermo-fill.emerging {
+            background: linear-gradient(to top, #f39c12, #e67e22);
+        }
+        
+        .thermo-fill.thriving {
+            background: linear-gradient(to top, #27ae60, #2ecc71);
+        }
+        
+        .thermo-score {
+            color: white;
+            font-weight: bold;
+            font-size: 0.9rem;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+        }
+        
+        .variation-indicator {
+            text-align: center;
+            padding: 8px 12px;
+            border-radius: 8px;
+            margin-top: 10px;
+            min-height: 50px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        
+        .variation-indicator.low {
+            background: #d5f4e6;
+            border: 1px solid #27ae60;
+        }
+        
+        .variation-indicator.medium {
+            background: #fef5e7;
+            border: 1px solid #f39c12;
+        }
+        
+        .variation-indicator.high {
+            background: #fadbd8;
+            border: 1px solid #e74c3c;
+        }
+        
+        .variation-text {
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        
+        .variation-indicator.low .variation-text {
+            color: #27ae60;
+        }
+        
+        .variation-indicator.medium .variation-text {
+            color: #f39c12;
+        }
+        
+        .variation-indicator.high .variation-text {
+            color: #e74c3c;
+        }
+        
+        .variation-range {
+            font-size: 0.7rem;
+            color: #6c757d;
+            line-height: 1.3;
+        }
+        
+        .grid-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+        
+        .chart-container {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+        }
+        
+        .chart-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #2c3e50;
+            text-align: center;
+        }
+        
+        .recommendations {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            border-radius: 15px;
+            padding: 30px;
+            color: white;
+            margin-bottom: 30px;
+        }
+        
+        .recommendations h3 {
+            font-size: 1.5rem;
+            margin-bottom: 25px;
+            text-align: center;
+        }
+        
+        .rec-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
+        }
+        
+        .rec-dimension {
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 20px;
+        }
+        
+        .rec-dim-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+            border-bottom: 1px solid rgba(255,255,255,0.3);
+            padding-bottom: 8px;
+        }
+        
+        .rec-list {
+            list-style: none;
+        }
+        
+        .rec-list li {
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.15);
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+        
+        .rec-list li:last-child {
+            border-bottom: none;
+        }
+        
+        .priority-badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.25);
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            margin-right: 8px;
+            font-weight: 600;
+        }
+        
+        .benchmark-section {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .benchmark-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #2c3e50;
+            text-align: center;
+        }
+        
+        .progress-bars {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+        
+        .progress-item {
+            text-align: center;
+        }
+        
+        .progress-label {
+            font-size: 0.9rem;
+            color: #6c757d;
+            margin-bottom: 10px;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 5px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+        
+        .progress-value {
+            font-size: 0.8rem;
+            color: #6c757d;
+        }
+        
+        .dimensional-maturity {
+            margin-bottom: 40px;
+        }
+        
+        .dimension-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .dimension-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            border-left: 5px solid;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .dimension-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+        }
+        
+        .dimension-card.building {
+            border-left-color: #e74c3c;
+        }
+        
+        .dimension-card.emerging {
+            border-left-color: #f39c12;
+        }
+        
+        .dimension-card.thriving {
+            border-left-color: #27ae60;
+        }
+        
+        .dimension-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .dimension-icon {
+            font-size: 1.5rem;
+            margin-right: 12px;
+        }
+        
+        .dimension-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        
+        .dimension-score {
+            font-size: 2.2rem;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        
+        .dimension-level {
+            font-size: 1rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+        }
+        
+        .dimension-summary {
+            font-size: 0.9rem;
+            color: #6c757d;
+            line-height: 1.4;
+            margin-bottom: 15px;
+        }
+        
+        .dimension-details {
+            border-top: 1px solid #f1f3f4;
+            padding-top: 15px;
+        }
+        
+        .strength, .opportunity {
+            font-size: 0.85rem;
+            line-height: 1.4;
+            margin-bottom: 6px;
+        }
+        
+        .strength {
+            color: #27ae60;
+        }
+        
+        .opportunity {
+            color: #6c757d;
+        }
+        
+        .audience-breakdown {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .audience-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            text-align: center;
+        }
+        
+        .audience-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 15px;
+        }
+        
+        .audience-score {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .building { color: #e74c3c; }
+        .emerging { color: #f39c12; }
+        .thriving { color: #27ae60; }
+        
+        .insight-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        .insight-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+        }
+        
+        .insight-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 15px;
+        }
+        
+        .insight-content {
+            color: #6c757d;
+            line-height: 1.6;
+        }
+        
+        .filters {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        
+        .filter-group {
+            display: inline-block;
+            margin-right: 20px;
+        }
+        
+        .filter-group label {
+            font-weight: 600;
+            margin-right: 10px;
+            color: #2c3e50;
+        }
+        
+        .filter-group select {
+            padding: 8px 12px;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            background: white;
+        }
+        
+        @media (max-width: 1200px) {
+            .thermometer-group {
+                flex-wrap: wrap;
+                justify-content: center;
+                gap: 30px;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .maturity-overview {
+                grid-template-columns: 1fr;
+            }
+            
+            .grid-layout {
+                grid-template-columns: 1fr;
+            }
+            
+            .content {
+                padding: 20px;
+            }
+            
+            .header {
+                padding: 20px;
+            }
+            
+            .score-number {
+                font-size: 3rem;
+            }
+            
+            .thermometer-group {
+                gap: 20px;
+            }
+            
+            .thermometer-item {
+                min-width: 100px;
+            }
+            
+            .thermo-bar {
+                width: 40px;
+                height: 180px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <!-- Header -->
+        <div class="header">
+            <h1>Technology Maturity Assessment</h1>
+            <p>Jim Joseph Foundation Grantee Partner Dashboard</p>
+        </div>
+        
+        <!-- Organization Info -->
+        <div class="organization-info">
+            <div class="org-details">
+                <div class="org-stat">
+                    <div class="label">Organization</div>
+                    <div class="value">Sample Jewish Nonprofit</div>
+                </div>
+                <div class="org-stat">
+                    <div class="label">Budget Size</div>
+                    <div class="value">$2M - $10M</div>
+                </div>
+                <div class="org-stat">
+                    <div class="label">Staff Size</div>
+                    <div class="value">26-100 staff</div>
+                </div>
+                <div class="org-stat">
+                    <div class="label">Assessment Date</div>
+                    <div class="value">September 2025</div>
+                </div>
+                <div class="org-stat">
+                    <div class="label">Tech Staff</div>
+                    <div class="value">1 dedicated</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Main Content -->
+        <div class="content">
+            <!-- Maturity Overview -->
+            <div class="maturity-overview">
+                <div class="maturity-score">
+                    <div class="score-number">3.2</div>
+                    <div class="score-label">Overall: Emerging</div>
+                    <div class="score-description">
+                        Mixed maturity profile with Infrastructure leading and Data as growth opportunity. Strong foundation for strategic technology advancement.
+                    </div>
+                </div>
+                <div class="dimensions-chart">
+                    <div class="chart-title">Technology Maturity by Dimension</div>
+                    <div class="thermometer-container">
+                        <div class="thermometer-group">
+                            <div class="thermometer-item">
+                                <div class="thermo-label">Infrastructure</div>
+                                <div class="thermometer">
+                                    <div class="thermo-bar">
+                                        <div class="thermo-fill thriving" style="height: 72%;">
+                                            <div class="thermo-score">3.6</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="variation-indicator low">
+                                    <span class="variation-text">Low variation</span>
+                                    <div class="variation-range">CEO: 3.7 | Tech: 3.5 | Staff: 3.6</div>
+                                </div>
+                            </div>
+                            
+                            <div class="thermometer-item">
+                                <div class="thermo-label">Business Systems</div>
+                                <div class="thermometer">
+                                    <div class="thermo-bar">
+                                        <div class="thermo-fill emerging" style="height: 54%;">
+                                            <div class="thermo-score">3.2</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="variation-indicator medium">
+                                    <span class="variation-text">Medium variation</span>
+                                    <div class="variation-range">CEO: 3.8 | Tech: 2.9 | Staff: 2.9</div>
+                                </div>
+                            </div>
+                            
+                            <div class="thermometer-item">
+                                <div class="thermo-label">Data</div>
+                                <div class="thermometer">
+                                    <div class="thermo-bar">
+                                        <div class="thermo-fill building" style="height: 32%;">
+                                            <div class="thermo-score">2.6</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="variation-indicator high">
+                                    <span class="variation-text">High variation</span>
+                                    <div class="variation-range">CEO: 3.5 | Tech: 2.0 | Staff: 2.3</div>
+                                </div>
+                            </div>
+                            
+                            <div class="thermometer-item">
+                                <div class="thermo-label">Program Technology</div>
+                                <div class="thermometer">
+                                    <div class="thermo-bar">
+                                        <div class="thermo-fill emerging" style="height: 50%;">
+                                            <div class="thermo-score">3.0</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="variation-indicator low">
+                                    <span class="variation-text">Low variation</span>
+                                    <div class="variation-range">CEO: 3.1 | Staff: 2.9</div>
+                                </div>
+                            </div>
+                            
+                            <div class="thermometer-item">
+                                <div class="thermo-label">Culture</div>
+                                <div class="thermometer">
+                                    <div class="thermo-bar">
+                                        <div class="thermo-fill thriving" style="height: 74%;">
+                                            <div class="thermo-score">3.7</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="variation-indicator medium">
+                                    <span class="variation-text">Medium variation</span>
+                                    <div class="variation-range">CEO: 4.1 | Tech: 3.2 | Staff: 3.8</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Dimensional Maturity Breakdown -->
+            <div class="dimensional-maturity">
+                <div class="dimension-cards">
+                    <div class="dimension-card thriving">
+                        <div class="dimension-header">
+                            <div class="dimension-icon">🏗️</div>
+                            <div class="dimension-name">Infrastructure</div>
+                        </div>
+                        <div class="dimension-score">3.6</div>
+                        <div class="dimension-level thriving">Thriving</div>
+                        <div class="dimension-summary">Strong security, policies, and support systems in place</div>
+                        <div class="dimension-details">
+                            <div class="strength">✓ Excellent security training</div>
+                            <div class="strength">✓ Comprehensive policies</div>
+                            <div class="opportunity">→ Automate update management</div>
+                        </div>
+                    </div>
+                    
+                    <div class="dimension-card emerging">
+                        <div class="dimension-header">
+                            <div class="dimension-icon">💼</div>
+                            <div class="dimension-name">Business Systems</div>
+                        </div>
+                        <div class="dimension-score">3.2</div>
+                        <div class="dimension-level emerging">Emerging</div>
+                        <div class="dimension-summary">Solid operational platforms with integration opportunities</div>
+                        <div class="dimension-details">
+                            <div class="strength">✓ Good financial reporting</div>
+                            <div class="opportunity">→ Enhance HR self-service</div>
+                            <div class="opportunity">→ Integrate CRM with other systems</div>
+                        </div>
+                    </div>
+                    
+                    <div class="dimension-card building">
+                        <div class="dimension-header">
+                            <div class="dimension-icon">📊</div>
+                            <div class="dimension-name">Data</div>
+                        </div>
+                        <div class="dimension-score">2.6</div>
+                        <div class="dimension-level building">Building</div>
+                        <div class="dimension-summary">Basic data collection needs analytics and integration</div>
+                        <div class="dimension-details">
+                            <div class="opportunity">→ Implement data dashboards</div>
+                            <div class="opportunity">→ Staff data literacy training</div>
+                            <div class="opportunity">→ Data governance policies</div>
+                        </div>
+                    </div>
+                    
+                    <div class="dimension-card emerging">
+                        <div class="dimension-header">
+                            <div class="dimension-icon">🎯</div>
+                            <div class="dimension-name">Program Technology</div>
+                        </div>
+                        <div class="dimension-score">3.0</div>
+                        <div class="dimension-level emerging">Emerging</div>
+                        <div class="dimension-summary">Some technology integration with room for innovation</div>
+                        <div class="dimension-details">
+                            <div class="strength">✓ Basic program systems</div>
+                            <div class="opportunity">→ AI pilot programs</div>
+                            <div class="opportunity">→ Mobile program delivery</div>
+                        </div>
+                    </div>
+                    
+                    <div class="dimension-card thriving">
+                        <div class="dimension-header">
+                            <div class="dimension-icon">🌟</div>
+                            <div class="dimension-name">Culture</div>
+                        </div>
+                        <div class="dimension-score">3.7</div>
+                        <div class="dimension-level thriving">Thriving</div>
+                        <div class="dimension-summary">Strong leadership support and change readiness</div>
+                        <div class="dimension-details">
+                            <div class="strength">✓ Technology in leadership agenda</div>
+                            <div class="strength">✓ Staff embrace change</div>
+                            <div class="opportunity">→ Innovation experimentation</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Filters -->
+            <div class="filters">
+                <div class="filter-group">
+                    <label>View:</label>
+                    <select id="viewFilter">
+                        <option value="overall">Overall Results</option>
+                        <option value="ceo">CEO Perspective</option>
+                        <option value="tech">Tech Lead Perspective</option>
+                        <option value="staff">Staff Perspective</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Compare to:</label>
+                    <select id="benchmarkFilter">
+                        <option value="all">All Organizations</option>
+                        <option value="similar-size">Similar Size ($2M-$10M)</option>
+                        <option value="similar-staff">Similar Staff (26-100)</option>
+                        <option value="sector">Jewish Education Sector</option>
+                    </select>
+                </div>
+            </div>
+            
+            <!-- Grid Layout Charts -->
+            <div class="grid-layout">
+                <div class="chart-container">
+                    <div class="chart-title">Strengths & Gaps Analysis</div>
+                    <canvas id="strengthsChart" width="300" height="200"></canvas>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-title">Maturity Distribution</div>
+                    <canvas id="benchmarkChart" width="300" height="200"></canvas>
+                </div>
+            </div>
+            
+            <!-- Benchmark Section -->
+            <div class="benchmark-section">
+                <div class="benchmark-title">Your Progress vs Peer Organizations</div>
+                <div class="progress-bars">
+                    <div class="progress-item">
+                        <div class="progress-label">Similar Budget Range</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: 65%; background: #f39c12;"></div>
+                        </div>
+                        <div class="progress-value">65th percentile</div>
+                    </div>
+                    <div class="progress-item">
+                        <div class="progress-label">Similar Staff Size</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: 58%; background: #f39c12;"></div>
+                        </div>
+                        <div class="progress-value">58th percentile</div>
+                    </div>
+                    <div class="progress-item">
+                        <div class="progress-label">Jewish Education Sector</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: 72%; background: #27ae60;"></div>
+                        </div>
+                        <div class="progress-value">72nd percentile</div>
+                    </div>
+                    <div class="progress-item">
+                        <div class="progress-label">All Grantee Partners</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: 61%; background: #f39c12;"></div>
+                        </div>
+                        <div class="progress-value">61st percentile</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Recommendations -->
+            <div class="recommendations">
+                <h3>Priority Recommendations by Dimension</h3>
+                <div class="rec-grid">
+                    <div class="rec-dimension">
+                        <div class="rec-dim-title">🏗️ Infrastructure (Thriving)</div>
+                        <ul class="rec-list">
+                            <li><span class="priority-badge">LOW</span>Implement automated patch management system</li>
+                            <li><span class="priority-badge">LOW</span>Consider zero-trust security architecture</li>
+                        </ul>
+                    </div>
+                    <div class="rec-dimension">
+                        <div class="rec-dim-title">💼 Business Systems (Emerging)</div>
+                        <ul class="rec-list">
+                            <li><span class="priority-badge">MEDIUM</span>Integrate CRM with financial and program systems</li>
+                            <li><span class="priority-badge">MEDIUM</span>Enhance HR self-service capabilities</li>
+                        </ul>
+                    </div>
+                    <div class="rec-dimension">
+                        <div class="rec-dim-title">📊 Data (Building)</div>
+                        <ul class="rec-list">
+                            <li><span class="priority-badge">HIGH</span>Implement data analytics dashboards</li>
+                            <li><span class="priority-badge">HIGH</span>Develop data governance framework</li>
+                            <li><span class="priority-badge">MEDIUM</span>Staff data literacy training program</li>
+                        </ul>
+                    </div>
+                    <div class="rec-dimension">
+                        <div class="rec-dim-title">🎯 Program Technology (Emerging)</div>
+                        <ul class="rec-list">
+                            <li><span class="priority-badge">MEDIUM</span>Pilot AI tools for program efficiency</li>
+                            <li><span class="priority-badge">MEDIUM</span>Develop mobile program delivery capabilities</li>
+                        </ul>
+                    </div>
+                    <div class="rec-dimension">
+                        <div class="rec-dim-title">🌟 Culture (Thriving)</div>
+                        <ul class="rec-list">
+                            <li><span class="priority-badge">LOW</span>Innovation experimentation program</li>
+                            <li><span class="priority-badge">LOW</span>Technology mentorship for other organizations</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Insight Cards -->
+            <div class="insight-cards">
+                <div class="insight-card">
+                    <div class="insight-title">📊 Data Perception Gap</div>
+                    <div class="insight-content">
+                        <strong>High variation in Data dimension:</strong> CEO sees data capabilities positively (3.5) while Tech Lead (2.0) and Staff (2.3) experience significant limitations. Indicates leadership may not fully understand day-to-day data challenges.
+                    </div>
+                </div>
+                <div class="insight-card">
+                    <div class="insight-title">💼 Business Systems Alignment</div>
+                    <div class="insight-content">
+                        <strong>Medium variation:</strong> CEO satisfied with financial reporting (3.8) but Tech Lead and Staff struggle with system limitations (2.9). Focus on user experience improvements needed.
+                    </div>
+                </div>
+                <div class="insight-card">
+                    <div class="insight-title">🌟 Culture Consensus</div>
+                    <div class="insight-content">
+                        <strong>Good alignment on Culture:</strong> All audiences recognize strong organizational support for technology (CEO: 4.1, Staff: 3.8, Tech: 3.2). Foundation for strategic initiatives.
+                    </div>
+                </div>
+                <div class="insight-card">
+                    <div class="insight-title">🎯 Strategic Recommendations</div>
+                    <div class="insight-content">
+                        Address perception gaps through joint leadership/staff data training. High variations indicate communication opportunities between leadership and operational teams.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Strengths data - horizontal bar chart showing scores by dimension
+        const strengthsData = {
+            labels: ['Culture', 'Infrastructure', 'Business Systems', 'Program Tech', 'Data'],
+            datasets: [{
+                data: [3.7, 3.6, 3.2, 3.0, 2.6],
+                backgroundColor: ['#27ae60', '#27ae60', '#f39c12', '#f39c12', '#e74c3c'],
+                borderWidth: 0
+            }]
+        };
+        
+        // Benchmark data - comparing maturity distributions
+        const benchmarkData = {
+            labels: ['Building (1.0-2.4)', 'Emerging (2.5-3.4)', 'Thriving (3.5-5.0)'],
+            datasets: [{
+                label: 'Your Dimensions',
+                data: [1, 2, 2],
+                backgroundColor: '#3498db',
+                barThickness: 30
+            }, {
+                label: 'Peer Average',
+                data: [2, 2, 1],
+                backgroundColor: '#95a5a6',
+                barThickness: 30
+            }]
+        };
+        
+        // Initialize Strengths Chart (horizontal bar)
+        const ctx2 = document.getElementById('strengthsChart').getContext('2d');
+        new Chart(ctx2, {
+            type: 'bar',
+            data: strengthsData,
+            options: {
+                responsive: true,
+                indexAxis: 'y',
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        max: 5,
+                        ticks: {
+                            stepSize: 1
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    title: {
+                        display: false
+                    }
+                }
+            }
+        });
+        
+        // Initialize Benchmark Chart (vertical grouped bar)
+        const ctx3 = document.getElementById('benchmarkChart').getContext('2d');
+        new Chart(ctx3, {
+            type: 'bar',
+            data: benchmarkData,
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 5,
+                        ticks: {
+                            stepSize: 1
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+        
+        // Filter functionality (simplified for demo)
+        document.getElementById('viewFilter').addEventListener('change', function(e) {
+            console.log('View filter changed to:', e.target.value);
+            // In production, this would update all visualizations with role-specific data
+        });
+        
+        document.getElementById('benchmarkFilter').addEventListener('change', function(e) {
+            console.log('Benchmark filter changed to:', e.target.value);
+            // In production, this would update benchmark comparisons
+        });
+    </script>
+</body>
+</html>

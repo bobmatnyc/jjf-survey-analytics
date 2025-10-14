@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aggregate Summary Visual Example</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom scrollbar for summary sections */
+        .summary-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .summary-scroll::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        .summary-scroll::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 3px;
+        }
+
+        .summary-scroll::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.5);
+        }
+
+        /* Firefox scrollbar styling */
+        .summary-scroll {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.3) rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-4xl mx-auto space-y-8">
+        <h1 class="text-3xl font-bold text-gray-900 mb-4">
+            Aggregate Summary - Visual Examples
+        </h1>
+
+        <p class="text-gray-700 mb-6">
+            This page demonstrates the expanded aggregate summary with scrolling functionality.
+        </p>
+
+        <!-- Example 1: Short Summary (No Scrolling) -->
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800">
+                Example 1: Short Summary (No Scrolling Required)
+            </h2>
+
+            <div class="text-center p-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl text-white shadow-lg">
+                <div class="text-6xl font-bold mb-2">2.5</div>
+                <div class="text-2xl mb-4">Overall: Building</div>
+                <div class="text-base opacity-90 leading-relaxed mb-4">
+                    Early stage with foundational gaps
+                </div>
+
+                <!-- SHORT Aggregate Summary (< 192px height) -->
+                <div class="text-sm opacity-85 leading-relaxed border-t border-white/30 pt-4 mt-4 max-h-48 overflow-y-auto pr-2 summary-scroll">
+                    The organization demonstrates building technology maturity with an overall score of 2.5/5.0.
+                    Some capabilities in Data Management provide a foundation, but critical gaps in Infrastructure
+                    and Organizational Culture require immediate attention. Top Priority: Establish foundational
+                    technology systems and build core technical capacity through systematic investment.
+                </div>
+            </div>
+
+            <p class="text-sm text-gray-600 mt-4">
+                ℹ️ Short summary (~350 chars) - No scrollbar appears as content fits within 192px height
+            </p>
+        </div>
+
+        <!-- Example 2: Medium Summary (Borderline Scrolling) -->
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800">
+                Example 2: Medium Summary (Borderline Scrolling)
+            </h2>
+
+            <div class="text-center p-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl text-white shadow-lg">
+                <div class="text-6xl font-bold mb-2">3.0</div>
+                <div class="text-2xl mb-4">Overall: Emerging</div>
+                <div class="text-base opacity-90 leading-relaxed mb-4">
+                    Functional systems with integration gaps
+                </div>
+
+                <!-- MEDIUM Aggregate Summary (~192px height) -->
+                <div class="text-sm opacity-85 leading-relaxed border-t border-white/30 pt-4 mt-4 max-h-48 overflow-y-auto pr-2 summary-scroll">
+                    Technology maturity assessment reveals moderate digital transformation potential at 3.0/5.0.
+                    Strong data management (4.0/5.0) and infrastructure (3.5/5.0) capabilities exist, providing
+                    a solid operational foundation with effective data practices and integrated platforms. However,
+                    critical gaps in business systems (2.0/5.0) and organizational culture (1.9/5.0) present
+                    significant risks, including inconsistent technology adoption and lack of standardized processes
+                    across teams. Top priority: develop comprehensive change management program to enhance cultural
+                    readiness and strategic system alignment while addressing integration challenges.
+                </div>
+            </div>
+
+            <p class="text-sm text-gray-600 mt-4">
+                ℹ️ Medium summary (~550 chars) - Scrollbar may appear depending on font rendering
+            </p>
+        </div>
+
+        <!-- Example 3: Long Summary (Scrolling Required) -->
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800">
+                Example 3: Long Summary (Scrolling Required)
+            </h2>
+
+            <div class="text-center p-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl text-white shadow-lg">
+                <div class="text-6xl font-bold mb-2">3.8</div>
+                <div class="text-2xl mb-4">Overall: Thriving</div>
+                <div class="text-base opacity-90 leading-relaxed mb-4">
+                    Advanced capabilities with optimization opportunities
+                </div>
+
+                <!-- LONG Aggregate Summary (> 192px height) -->
+                <div class="text-sm opacity-85 leading-relaxed border-t border-white/30 pt-4 mt-4 max-h-48 overflow-y-auto pr-2 summary-scroll">
+                    The organization demonstrates thriving technology maturity with an overall score of 3.8/5.0,
+                    indicating well-established systems and processes across multiple dimensions. Strong performance
+                    in Data Management (4.5/5.0), Program Technology (4.2/5.0), and Business Systems (4.0/5.0)
+                    provides a robust operational foundation with mature data governance practices, integrated
+                    program delivery platforms, and comprehensive business intelligence capabilities that effectively
+                    support organizational objectives. Infrastructure (3.5/5.0) demonstrates solid technical foundations
+                    with reliable systems and security protocols, though opportunities exist for further cloud
+                    optimization and automation. However, Organizational Culture (2.8/5.0) presents a critical gap,
+                    with inconsistent technology adoption across teams, limited digital fluency among staff, and
+                    lack of systematic change management processes that could hinder future innovation and limit
+                    the organization's ability to fully leverage its technical investments. Top Priority: Develop
+                    a comprehensive digital transformation strategy focused on cultural readiness through systematic
+                    technology training programs, cross-functional collaboration initiatives, and formal change
+                    management frameworks to ensure all stakeholders can effectively utilize existing capabilities
+                    while building capacity for future innovations and maintaining competitive advantage in the
+                    rapidly evolving nonprofit technology landscape.
+                </div>
+            </div>
+
+            <p class="text-sm text-gray-600 mt-4">
+                ✅ Long summary (~1200 chars) - Scrollbar appears, allowing user to scroll through full content
+            </p>
+            <p class="text-sm text-gray-500 mt-2">
+                <strong>Interaction:</strong> Hover over the scrollbar to see it become more opaque.
+                Scroll to reveal the full summary text.
+            </p>
+        </div>
+
+        <!-- Technical Details -->
+        <div class="bg-blue-50 rounded-lg p-6 border-l-4 border-blue-500">
+            <h3 class="text-lg font-semibold text-blue-900 mb-3">Technical Implementation</h3>
+            <ul class="space-y-2 text-sm text-blue-800">
+                <li>✅ <strong>Max Height:</strong> 192px (max-h-48 / ~6-8 lines)</li>
+                <li>✅ <strong>Overflow:</strong> Vertical auto-scroll (overflow-y-auto)</li>
+                <li>✅ <strong>Padding:</strong> 8px right padding (pr-2) prevents scrollbar overlap</li>
+                <li>✅ <strong>Scrollbar:</strong> 6px thin, semi-transparent white</li>
+                <li>✅ <strong>Hover Effect:</strong> Opacity increases from 30% to 50%</li>
+                <li>✅ <strong>Border Radius:</strong> 3px rounded scrollbar</li>
+                <li>✅ <strong>Browser Support:</strong> WebKit (Chrome/Safari/Edge) and Firefox</li>
+            </ul>
+        </div>
+
+        <!-- CSS Reference -->
+        <div class="bg-gray-50 rounded-lg p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-3">CSS Classes Applied</h3>
+            <pre class="bg-gray-800 text-green-400 p-4 rounded overflow-x-auto text-xs"><code>&lt;div class="text-sm opacity-85 leading-relaxed border-t border-white/30
+     pt-4 mt-4 max-h-48 overflow-y-auto pr-2 summary-scroll"&gt;
+    {{ report.maturity.aggregate_summary }}
+&lt;/div&gt;</code></pre>
+
+            <h4 class="text-md font-semibold text-gray-900 mt-4 mb-2">Custom CSS:</h4>
+            <pre class="bg-gray-800 text-green-400 p-4 rounded overflow-x-auto text-xs"><code>.summary-scroll::-webkit-scrollbar {
+    width: 6px;
+}
+
+.summary-scroll::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+}
+
+.summary-scroll::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 3px;
+}
+
+.summary-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.5);
+}
+
+/* Firefox */
+.summary-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.3) rgba(255, 255, 255, 0.1);
+}</code></pre>
+        </div>
+
+        <div class="text-center text-gray-600 text-sm mt-8 pb-8">
+            <p>Generated: 2025-10-14</p>
+            <p>JJF Survey Analytics - Aggregate Summary Expansion</p>
+        </div>
+    </div>
+</body>
+</html>

@@ -132,8 +132,38 @@ class ReportGenerator:
                 ai_insights = self.ai_analyzer.analyze_organization_qualitative(
                     org_name, free_text_responses
                 )
+
+                # Consolidate AI dimension summaries
+                if ai_insights and "dimensions" in ai_insights:
+                    for dimension, analysis in ai_insights["dimensions"].items():
+                        if "summary" in analysis and analysis["summary"]:
+                            # Target 120 characters for dimension summaries
+                            analysis["summary"] = self.ai_analyzer.consolidate_text(
+                                analysis["summary"], max_chars=120
+                            )
             except Exception as e:
                 print(f"Warning: AI analysis failed for {org_name}: {e}")
+
+        # Consolidate maturity description if AI is available
+        if self.enable_ai and self.ai_analyzer and maturity_assessment.get("maturity_description"):
+            try:
+                # Target 55 characters for overall description
+                maturity_assessment["maturity_description"] = self.ai_analyzer.consolidate_text(
+                    maturity_assessment["maturity_description"], max_chars=55
+                )
+            except Exception as e:
+                print(f"Warning: Could not consolidate maturity description: {e}")
+
+        # Generate aggregate summary if AI is available
+        if self.enable_ai and self.ai_analyzer and maturity_assessment:
+            try:
+                aggregate_summary = self._generate_aggregate_summary(
+                    maturity_assessment, ai_insights
+                )
+                maturity_assessment["aggregate_summary"] = aggregate_summary
+            except Exception as e:
+                print(f"Warning: Could not generate aggregate summary: {e}")
+                maturity_assessment["aggregate_summary"] = None
 
         # Build report sections
         report = {
@@ -709,6 +739,171 @@ class ReportGenerator:
         return recommendations
 
     # Utility Methods
+
+    def _generate_aggregate_summary(
+        self, maturity_assessment: Dict[str, Any], ai_insights: Optional[Dict[str, Any]]
+    ) -> str:
+        """
+        Generate an executive summary that consolidates insights from all dimensions.
+
+        Args:
+            maturity_assessment: Maturity assessment with dimension scores
+            ai_insights: AI insights with dimension summaries (optional)
+
+        Returns:
+            A comprehensive 5-7 sentence summary (~600 characters) highlighting:
+            - Overall organizational maturity
+            - 2-3 key strengths with specific scores
+            - 2-3 critical gaps requiring attention
+            - Strategic priorities and recommendations
+            - Implementation timeline or next steps
+        """
+        overall_score = maturity_assessment.get("overall_score", 0)
+        maturity_level = maturity_assessment.get("maturity_level", "Unknown")
+        variance_analysis = maturity_assessment.get("variance_analysis", {})
+
+        if not variance_analysis:
+            return "No dimension data available for analysis."
+
+        # Collect dimension scores
+        dimension_scores = {
+            dim: analysis["weighted_score"]
+            for dim, analysis in variance_analysis.items()
+            if "weighted_score" in analysis
+        }
+
+        if not dimension_scores:
+            return "No dimension scores available for analysis."
+
+        # Identify strengths (top 2 highest scoring dimensions)
+        sorted_dimensions = sorted(dimension_scores.items(), key=lambda x: x[1], reverse=True)
+        strengths = sorted_dimensions[:2]
+        gaps = sorted_dimensions[-2:]
+
+        # Build context for AI
+        dimension_summaries = []
+        for dim, score in sorted_dimensions:
+            level = self._get_maturity_level_name(score)
+            summary_line = f"{dim}: {level} ({score:.1f}/5.0)"
+
+            # Add AI summary if available
+            if ai_insights and "dimensions" in ai_insights:
+                dim_insights = ai_insights["dimensions"].get(dim, {})
+                if "summary" in dim_insights and dim_insights["summary"]:
+                    summary_line += f" - {dim_insights['summary']}"
+
+            dimension_summaries.append(summary_line)
+
+        # Create prompt for aggregate summary with expanded requirements
+        prompt = f"""Based on these technology maturity assessments for a nonprofit organization, create a comprehensive 5-7 sentence executive summary (~600 characters):
+
+Overall Score: {overall_score:.1f}/5.0 ({maturity_level})
+
+Dimension Assessments:
+{chr(10).join(dimension_summaries)}
+
+Requirements:
+- Paragraph 1 (2 sentences): Overall assessment and maturity characterization
+- Paragraph 2 (2-3 sentences): Key strengths with specific dimension scores and what's working well (mention: {strengths[0][0]} at {strengths[0][1]:.1f} and {strengths[1][0]} at {strengths[1][1]:.1f})
+- Paragraph 3 (2 sentences): Critical gaps with specific dimension scores and business impact (mention: {gaps[0][0]} at {gaps[0][1]:.1f} and {gaps[1][0]} at {gaps[1][1]:.1f})
+- Final sentence: Top strategic priority with actionable next step
+
+Length: 500-600 characters (5-7 sentences)
+Tone: Professional, executive-level, actionable
+Format: Three paragraphs separated by line breaks
+
+Executive Summary:"""
+
+        # Use existing AI infrastructure to generate
+        if self.ai_analyzer:
+            try:
+                # Generate summary with AI - increased max_tokens for longer output
+                response = self.ai_analyzer.client.chat.completions.create(
+                    model=self.ai_analyzer.model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are an expert technology consultant creating comprehensive executive summaries for nonprofit organizations. Provide detailed, actionable insights in 5-7 sentences organized into three paragraphs."
+                        },
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.4,
+                    max_tokens=400  # Increased from 150 to accommodate longer summary
+                )
+
+                summary = response.choices[0].message.content.strip()
+
+                # Remove quotes if LLM added them
+                if summary.startswith('"') and summary.endswith('"'):
+                    summary = summary[1:-1]
+                if summary.startswith("'") and summary.endswith("'"):
+                    summary = summary[1:-1]
+
+                # Consolidate to target length if needed (increased from 200 to 600)
+                if len(summary) > 650:
+                    summary = self.ai_analyzer.consolidate_text(summary, max_chars=600)
+
+                return summary
+            except Exception as e:
+                print(f"Error generating aggregate summary with AI: {e}")
+                # Fall through to fallback
+
+        # Fallback: construct basic summary without AI (expanded version)
+        summary_parts = []
+
+        # Overall assessment
+        summary_parts.append(
+            f"The organization demonstrates {maturity_level.lower()} technology maturity "
+            f"with an overall score of {overall_score:.1f}/5.0"
+        )
+
+        # Strengths
+        if strengths:
+            summary_parts.append(
+                f"Strong performance in {strengths[0][0]} ({strengths[0][1]:.1f}) "
+                f"and {strengths[1][0]} ({strengths[1][1]:.1f}) provides a solid operational foundation, "
+                f"demonstrating effective practices in these critical areas"
+            )
+
+        # Gaps
+        if gaps:
+            summary_parts.append(
+                f"However, critical gaps in {gaps[0][0]} ({gaps[0][1]:.1f}) "
+                f"and {gaps[1][0]} ({gaps[1][1]:.1f}) present significant risks and require immediate attention "
+                f"to prevent operational challenges and ensure sustainable growth"
+            )
+
+        # Strategic recommendation with implementation guidance
+        if overall_score < 2.5:
+            summary_parts.append(
+                "Top Priority: Establish foundational technology systems and build core technical capacity "
+                "through systematic investment in infrastructure, training, and standardized processes"
+            )
+        elif overall_score < 3.5:
+            summary_parts.append(
+                "Top Priority: Focus on system integration and process optimization while addressing "
+                "identified gaps through targeted improvements and cross-functional collaboration"
+            )
+        else:
+            summary_parts.append(
+                "Top Priority: Pursue strategic innovation and advanced capabilities by leveraging "
+                "existing strengths while continuously monitoring and improving lower-performing areas"
+            )
+
+        return ". ".join(summary_parts) + "."
+
+    def _get_maturity_level_name(self, score: float) -> str:
+        """Get maturity level name for a given score."""
+        if score < 2.0:
+            return "Building (Early)"
+        elif score < 2.5:
+            return "Building (Late)"
+        elif score < 3.5:
+            return "Emerging"
+        elif score < 4.5:
+            return "Thriving (Early)"
+        else:
+            return "Thriving (Advanced)"
 
     def _get_answer_text(self, value: Any, question_info: Dict) -> str:
         """Get answer text from answer key lookup."""

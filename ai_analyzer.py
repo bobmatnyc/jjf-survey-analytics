@@ -181,6 +181,68 @@ Keep the summary professional, actionable, and suitable for a dashboard overview
             print(f"Error summarizing feedback: {e}")
             return f"Error generating summary: {str(e)}"
 
+    def consolidate_text(self, text: str, max_chars: int = 150) -> str:
+        """
+        Consolidate long text into concise version using LLM.
+
+        Args:
+            text: Original text to consolidate
+            max_chars: Target character count (approximate)
+
+        Returns:
+            Consolidated text that preserves key insights
+        """
+        # If already short enough, return as-is
+        if len(text) <= max_chars:
+            return text
+
+        prompt = f"""Consolidate this text to approximately {max_chars} characters while preserving key insights:
+
+Original text ({len(text)} chars):
+{text}
+
+Requirements:
+- Keep essential information and insights
+- Remove redundant phrases and filler words
+- Use concise, professional language
+- Maintain the same tone and meaning
+- Target length: {max_chars} characters (strict maximum)
+
+Return ONLY the consolidated text, no explanations or metadata:"""
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are an expert editor who consolidates verbose text into concise summaries while preserving key insights. Return only the consolidated text."
+                    },
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.3,
+                max_tokens=100  # Keep response short
+            )
+
+            consolidated = response.choices[0].message.content.strip()
+
+            # Remove quotes if LLM added them
+            if consolidated.startswith('"') and consolidated.endswith('"'):
+                consolidated = consolidated[1:-1]
+            if consolidated.startswith("'") and consolidated.endswith("'"):
+                consolidated = consolidated[1:-1]
+
+            # Fallback: if still too long, hard truncate
+            if len(consolidated) > max_chars + 20:
+                consolidated = consolidated[:max_chars] + "..."
+
+            return consolidated
+
+        except Exception as e:
+            print(f"Error consolidating text: {e}")
+            # Fallback: simple truncation
+            return text[:max_chars] + "..." if len(text) > max_chars else text
+
     def analyze_organization_qualitative(
         self, org_name: str, all_responses: Dict[str, List[Dict[str, Any]]]
     ) -> Dict[str, Any]:
