@@ -8,11 +8,11 @@ import os
 import subprocess
 from typing import Dict, Optional
 
-__version__ = "1.0.0"
-__build_date__ = None
+__version__ = "1.0.1"
+__build_date__ = "2025-10-14T19:54:27.937646"
 __build_number__ = None
-__git_commit__ = None
-__git_branch__ = None
+__git_commit__ = "e6df7bb"
+__git_branch__ = "main"
 
 
 def get_git_info() -> Dict[str, Optional[str]]:
