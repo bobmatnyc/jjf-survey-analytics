@@ -9,6 +9,6 @@ restartPolicyMaxRetries = 3
 variables = {
   LOG_LEVEL = "INFO",
   RAILWAY_ENVIRONMENT = "production",
-  REQUIRE_AUTH = "false",
+  REQUIRE_AUTH = "true",
   PYTHONUNBUFFERED = "1"
 }
