@@ -21,6 +21,10 @@ app.secret_key = os.getenv('SECRET_KEY', 'simple-dev-key-change-in-production')
 APP_PASSWORD = os.getenv('APP_PASSWORD', 'survey2025!')
 REQUIRE_AUTH = os.getenv('REQUIRE_AUTH', 'false').lower() == 'true'
 
+# Debug: Log authentication configuration on startup
+print(f"[AUTH CONFIG] REQUIRE_AUTH env var: {os.getenv('REQUIRE_AUTH', 'NOT_SET')}")
+print(f"[AUTH CONFIG] REQUIRE_AUTH boolean: {REQUIRE_AUTH}")
+
 # Global in-memory data storage
 SHEET_DATA: Dict[str, List[Dict[str, Any]]] = {}
 
