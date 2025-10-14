@@ -469,34 +469,65 @@ class ReportGenerator:
         """Build aggregate overview metrics."""
         total_orgs = len(intake_data)
 
-        # Count completed surveys
-        ceo_complete = len([r for r in ceo_data if r.get("Date")])
-        tech_complete = len([r for r in tech_data if r.get("Date")])
-        staff_complete = len([r for r in staff_data if r.get("Date")])
+        # Count unique organizations per survey type (FIXED: count orgs, not responses)
+        orgs_with_ceo = {
+            r.get("CEO Organization") or r.get("Organization")
+            for r in ceo_data
+            if r.get("Date") and (r.get("CEO Organization") or r.get("Organization"))
+        }
+        orgs_with_tech = {
+            r.get("Organization") for r in tech_data if r.get("Date") and r.get("Organization")
+        }
+        orgs_with_staff = {
+            r.get("Organization") for r in staff_data if r.get("Date") and r.get("Organization")
+        }
+
+        # Organizations with at least one survey
+        responding_orgs = orgs_with_ceo | orgs_with_tech | orgs_with_staff
+        responding_orgs_count = len(responding_orgs)
+
+        # Count completed survey types (not individual responses)
+        ceo_complete = len(orgs_with_ceo)  # 3 orgs
+        tech_complete = len(orgs_with_tech)  # 2 orgs
+        staff_complete = len(orgs_with_staff)  # 2 orgs (not 4 responses!)
+        surveys_completed = ceo_complete + tech_complete + staff_complete  # 7 total
+
+        # Expected surveys based on responding organizations
+        expected_surveys = responding_orgs_count * 3  # 3 orgs × 3 = 9
 
         # Count fully complete organizations
-        orgs_with_ceo = {r.get("CEO Organization") for r in ceo_data if r.get("Date")}
-        orgs_with_tech = {r.get("Organization") for r in tech_data if r.get("Date")}
-        orgs_with_staff = {r.get("Organization") for r in staff_data if r.get("Date")}
         fully_complete = len(orgs_with_ceo & orgs_with_tech & orgs_with_staff)
 
         return {
-            "total_organizations": total_orgs,
-            "total_surveys_expected": total_orgs * 3,
-            "surveys_completed": ceo_complete + tech_complete + staff_complete,
-            "surveys_pending": (total_orgs * 3) - (ceo_complete + tech_complete + staff_complete),
+            "total_organizations": total_orgs,  # 28 (intake)
+            "responding_organizations": responding_orgs_count,  # 3 (NEW)
+            "total_surveys_expected": expected_surveys,  # 9 (not 84)
+            "surveys_completed": surveys_completed,  # 7 (not 9)
+            "surveys_pending": expected_surveys - surveys_completed,  # 2
             "completion_percentage": (
-                round(((ceo_complete + tech_complete + staff_complete) / (total_orgs * 3)) * 100)
-                if total_orgs > 0
+                round((surveys_completed / expected_surveys) * 100)
+                if expected_surveys > 0
+                else 0
+            ),  # 78% (not 11%)
+            "fully_complete_orgs": fully_complete,  # 1 (Hadar)
+            "ceo_complete": ceo_complete,  # 3 orgs
+            "tech_complete": tech_complete,  # 2 orgs
+            "staff_complete": staff_complete,  # 2 orgs
+            "ceo_percentage": (
+                round((ceo_complete / responding_orgs_count) * 100)
+                if responding_orgs_count > 0
                 else 0
             ),
-            "fully_complete_orgs": fully_complete,
-            "ceo_complete": ceo_complete,
-            "tech_complete": tech_complete,
-            "staff_complete": staff_complete,
-            "ceo_percentage": round((ceo_complete / total_orgs) * 100) if total_orgs > 0 else 0,
-            "tech_percentage": round((tech_complete / total_orgs) * 100) if total_orgs > 0 else 0,
-            "staff_percentage": round((staff_complete / total_orgs) * 100) if total_orgs > 0 else 0,
+            "tech_percentage": (
+                round((tech_complete / responding_orgs_count) * 100)
+                if responding_orgs_count > 0
+                else 0
+            ),
+            "staff_percentage": (
+                round((staff_complete / responding_orgs_count) * 100)
+                if responding_orgs_count > 0
+                else 0
+            ),
         }
 
     def _build_aggregate_breakdown(

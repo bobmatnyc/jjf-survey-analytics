@@ -4,7 +4,8 @@ Simple Flask App for JJF Survey Analytics - In-Memory Version
 No database required - reads directly from Google Sheets into memory.
 """
 
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, session, redirect, url_for, request, flash
+from functools import wraps
 import os
 from datetime import datetime
 from sheets_reader import SheetsReader
@@ -15,6 +16,10 @@ from version import get_version_string, get_version_info
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'simple-dev-key-change-in-production')
+
+# Authentication Configuration
+APP_PASSWORD = os.getenv('APP_PASSWORD', 'survey2025!')
+REQUIRE_AUTH = os.getenv('REQUIRE_AUTH', 'false').lower() == 'true'
 
 # Global in-memory data storage
 SHEET_DATA: Dict[str, List[Dict[str, Any]]] = {}
@@ -706,7 +711,57 @@ def get_complete_organizations() -> List[Dict[str, Any]]:
     return complete_orgs
 
 
+# ============================================================================
+# Authentication System
+# ============================================================================
+
+def require_auth(f):
+    """Authentication decorator for protecting routes."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not REQUIRE_AUTH:
+            return f(*args, **kwargs)
+        if 'authenticated' not in session:
+            return redirect(url_for('login', next=request.url))
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Login page."""
+    if not REQUIRE_AUTH:
+        return redirect(url_for('home'))
+
+    if request.method == 'POST':
+        password = request.form.get('password')
+        next_url = request.form.get('next') or url_for('home')
+
+        if password == APP_PASSWORD:
+            session['authenticated'] = True
+            flash('Successfully logged in!', 'success')
+            return redirect(next_url)
+        else:
+            flash('Invalid password. Please try again.', 'error')
+
+    next_url = request.args.get('next', url_for('home'))
+    return render_template('login.html', next_url=next_url)
+
+
+@app.route('/logout')
+def logout():
+    """Logout."""
+    session.pop('authenticated', None)
+    flash('You have been logged out.', 'info')
+    return redirect(url_for('login'))
+
+
+# ============================================================================
+# Application Routes
+# ============================================================================
+
 @app.route('/')
+@require_auth
 def home():
     """Home page with organization participation dashboard."""
     data_ready = bool(SHEET_DATA and '_metadata' in SHEET_DATA)
@@ -728,6 +783,7 @@ def home():
 
 
 @app.route('/admin')
+@require_auth
 def admin():
     """Admin page with data management functions."""
     stats = get_stats() if SHEET_DATA and '_metadata' in SHEET_DATA else {
@@ -741,6 +797,7 @@ def admin():
 
 
 @app.route('/data')
+@require_auth
 def data_nav():
     """Data navigation page with links to tabs."""
     if not SHEET_DATA or '_metadata' not in SHEET_DATA:
@@ -764,6 +821,7 @@ def data_nav():
 
 
 @app.route('/data/<tab_name>')
+@require_auth
 def view_tab(tab_name):
     """Display specific tab data in table format."""
     if not SHEET_DATA or '_metadata' not in SHEET_DATA:
@@ -804,6 +862,7 @@ def view_tab(tab_name):
 
 
 @app.route('/summary/organizations')
+@require_auth
 def summary_organizations():
     """Summary view of all organizations."""
     if not SHEET_DATA or '_metadata' not in SHEET_DATA:
@@ -831,6 +890,7 @@ def summary_organizations():
 
 
 @app.route('/summary/ceo')
+@require_auth
 def summary_ceo():
     """Summary view of CEO survey responses."""
     if not SHEET_DATA or '_metadata' not in SHEET_DATA:
@@ -859,6 +919,7 @@ def summary_ceo():
 
 
 @app.route('/summary/tech')
+@require_auth
 def summary_tech():
     """Summary view of Tech Lead survey responses."""
     if not SHEET_DATA or '_metadata' not in SHEET_DATA:
@@ -887,6 +948,7 @@ def summary_tech():
 
 
 @app.route('/summary/staff')
+@require_auth
 def summary_staff():
     """Summary view of Staff survey responses."""
     if not SHEET_DATA or '_metadata' not in SHEET_DATA:
@@ -915,6 +977,7 @@ def summary_staff():
 
 
 @app.route('/summary/complete')
+@require_auth
 def summary_complete():
     """Summary view of fully complete organizations."""
     if not SHEET_DATA or '_metadata' not in SHEET_DATA:
@@ -944,6 +1007,7 @@ def summary_complete():
 
 
 @app.route('/api/refresh', methods=['GET', 'POST'])
+@require_auth
 def api_refresh():
     """Refresh data from Google Sheets and clear report cache."""
     try:
@@ -970,12 +1034,14 @@ def api_refresh():
 
 
 @app.route('/api/extract', methods=['GET', 'POST'])
+@require_auth
 def api_extract():
     """Alias for /api/refresh for backward compatibility."""
     return api_refresh()
 
 
 @app.route('/api/stats')
+@require_auth
 def api_stats():
     """Get basic statistics."""
     if not SHEET_DATA or '_metadata' not in SHEET_DATA:
@@ -987,6 +1053,7 @@ def api_stats():
 
 
 @app.route('/api/response-rates')
+@require_auth
 def api_response_rates():
     """Get detailed response rate analysis using master organization list."""
     if not SHEET_DATA or '_metadata' not in SHEET_DATA:
@@ -1004,6 +1071,7 @@ def api_response_rates():
 
 
 @app.route('/api/cache/status')
+@require_auth
 def cache_status():
     """Get report cache status for monitoring."""
     org_reports_cached = list(REPORT_CACHE['org_reports'].keys())
@@ -1044,6 +1112,7 @@ def cache_status():
 
 
 @app.route('/api/cache/clear', methods=['POST'])
+@require_auth
 def clear_cache():
     """Manually clear the report cache."""
     REPORT_CACHE['org_reports'].clear()
@@ -1089,6 +1158,7 @@ def health_check():
 
 
 @app.route('/org/<org_name>')
+@require_auth
 def organization_detail(org_name):
     """
     Display organization detail page with survey status and contacts.
@@ -1171,6 +1241,7 @@ def organization_detail(org_name):
 
 
 @app.route('/report/<org_name>')
+@require_auth
 def organization_report(org_name):
     """
     Generate AI-powered organization report with maturity assessment.
@@ -1220,6 +1291,7 @@ def organization_report(org_name):
 
 
 @app.route('/report/aggregate')
+@require_auth
 def aggregate_report():
     """
     Generate aggregate report across all organizations.

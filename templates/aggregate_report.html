@@ -37,10 +37,13 @@
                 </p>
             </div>
             <div class="text-right">
-                <div class="text-5xl font-bold">{{ report.overview.total_organizations }}</div>
-                <div class="text-sm text-purple-100">Organizations</div>
+                <div class="text-5xl font-bold">{{ report.overview.responding_organizations }}</div>
+                <div class="text-sm text-purple-100">Organizations Responding</div>
                 <div class="text-xs text-purple-200 mt-1">
-                    {{ report.overview.surveys_completed }}/{{ report.overview.total_surveys_expected }} surveys complete
+                    {{ report.overview.surveys_completed }}/{{ report.overview.total_surveys_expected }} surveys complete ({{ report.overview.completion_percentage }}%)
+                </div>
+                <div class="text-xs text-purple-300 mt-1">
+                    {{ report.overview.total_organizations }} total organizations
                 </div>
             </div>
         </div>
