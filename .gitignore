@@ -246,3 +246,4 @@ yarn-error.log*
 .claude/
 CLAUDE_MPM_INITIALIZATION_REPORT.md
 .env.local
+backup_pre_organization_*.tar.gz
