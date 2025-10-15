@@ -13,7 +13,7 @@ import time
 import threading
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
-from survey_normalizer import SurveyNormalizer
+from src.normalizers.survey_normalizer import SurveyNormalizer
 import sqlite3
 import logging
 from db_utils import is_postgresql

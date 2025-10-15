@@ -8,11 +8,11 @@ from flask import Flask, render_template, jsonify, session, redirect, url_for, r
 from functools import wraps
 import os
 from datetime import datetime
-from sheets_reader import SheetsReader
+from src.extractors.sheets_reader import SheetsReader
 from typing import Dict, List, Any
-from report_generator import ReportGenerator
-from ai_analyzer import extract_free_text_responses
-from version import get_version_string, get_version_info
+from src.services.report_generator import ReportGenerator
+from src.analytics.ai_analyzer import extract_free_text_responses
+from src.utils.version import get_version_string, get_version_info
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'simple-dev-key-change-in-production')
@@ -780,7 +780,7 @@ def home():
             'funnel': get_funnel_data()
         }
 
-    return render_template('simple_home.html',
+    return render_template('simple/home.html',
                          db_ready=data_ready,
                          stats=stats,
                          dashboard=dashboard_data)
@@ -797,7 +797,7 @@ def admin():
         'spreadsheet_id': ''
     }
 
-    return render_template('simple_admin.html', stats=stats)
+    return render_template('simple/admin.html', stats=stats)
 
 
 @app.route('/data')
@@ -805,7 +805,7 @@ def admin():
 def data_nav():
     """Data navigation page with links to tabs."""
     if not SHEET_DATA or '_metadata' not in SHEET_DATA:
-        return render_template('simple_data_nav.html',
+        return render_template('simple/data_nav.html',
                              tabs=[],
                              error="Data not loaded. Please refresh data first.")
 
@@ -821,7 +821,7 @@ def data_nav():
             'last_extract': last_fetch
         })
 
-    return render_template('simple_data_nav.html', tabs=tabs, error=None)
+    return render_template('simple/data_nav.html', tabs=tabs, error=None)
 
 
 @app.route('/data/<tab_name>')
@@ -829,7 +829,7 @@ def data_nav():
 def view_tab(tab_name):
     """Display specific tab data in table format."""
     if not SHEET_DATA or '_metadata' not in SHEET_DATA:
-        return render_template('simple_tab_view.html',
+        return render_template('simple/tab_view.html',
                              tab_name=tab_name,
                              data=[],
                              columns=[],
@@ -838,7 +838,7 @@ def view_tab(tab_name):
     data = get_tab_data(tab_name)
 
     if not data:
-        return render_template('simple_tab_view.html',
+        return render_template('simple/tab_view.html',
                              tab_name=tab_name,
                              data=[],
                              columns=[],
@@ -858,7 +858,7 @@ def view_tab(tab_name):
             if key not in columns and key != '_row_index':
                 columns.append(key)
 
-    return render_template('simple_tab_view.html',
+    return render_template('simple/tab_view.html',
                          tab_name=tab_name,
                          data=indexed_data,
                          columns=columns,
@@ -870,7 +870,7 @@ def view_tab(tab_name):
 def summary_organizations():
     """Summary view of all organizations."""
     if not SHEET_DATA or '_metadata' not in SHEET_DATA:
-        return render_template('simple_summary.html',
+        return render_template('simple/summary.html',
                              page_title='Organizations',
                              summary_type='organizations',
                              data=[],
@@ -885,7 +885,7 @@ def summary_organizations():
         {'key': 'status', 'label': 'Status', 'class': 'text-center', 'badge': True}
     ]
 
-    return render_template('simple_summary.html',
+    return render_template('simple/summary.html',
                          page_title='Organizations - Intake Submissions',
                          summary_type='organizations',
                          data=data,
@@ -898,7 +898,7 @@ def summary_organizations():
 def summary_ceo():
     """Summary view of CEO survey responses."""
     if not SHEET_DATA or '_metadata' not in SHEET_DATA:
-        return render_template('simple_summary.html',
+        return render_template('simple/summary.html',
                              page_title='CEO Surveys',
                              summary_type='ceo',
                              data=[],
@@ -914,7 +914,7 @@ def summary_ceo():
         {'key': 'vision', 'label': 'Vision', 'class': 'text-gray-600 text-sm'},
     ]
 
-    return render_template('simple_summary.html',
+    return render_template('simple/summary.html',
                          page_title='CEO Survey Responses',
                          summary_type='ceo',
                          data=data,
@@ -927,7 +927,7 @@ def summary_ceo():
 def summary_tech():
     """Summary view of Tech Lead survey responses."""
     if not SHEET_DATA or '_metadata' not in SHEET_DATA:
-        return render_template('simple_summary.html',
+        return render_template('simple/summary.html',
                              page_title='Tech Lead Surveys',
                              summary_type='tech',
                              data=[],
@@ -943,7 +943,7 @@ def summary_tech():
         {'key': 'infrastructure', 'label': 'Infrastructure', 'class': 'text-gray-600 text-sm'},
     ]
 
-    return render_template('simple_summary.html',
+    return render_template('simple/summary.html',
                          page_title='Tech Lead Survey Responses',
                          summary_type='tech',
                          data=data,
@@ -956,7 +956,7 @@ def summary_tech():
 def summary_staff():
     """Summary view of Staff survey responses."""
     if not SHEET_DATA or '_metadata' not in SHEET_DATA:
-        return render_template('simple_summary.html',
+        return render_template('simple/summary.html',
                              page_title='Staff Surveys',
                              summary_type='staff',
                              data=[],
@@ -972,7 +972,7 @@ def summary_staff():
         {'key': 'usage', 'label': 'Usage', 'class': 'text-gray-600 text-sm'},
     ]
 
-    return render_template('simple_summary.html',
+    return render_template('simple/summary.html',
                          page_title='Staff Survey Responses',
                          summary_type='staff',
                          data=data,
@@ -985,7 +985,7 @@ def summary_staff():
 def summary_complete():
     """Summary view of fully complete organizations."""
     if not SHEET_DATA or '_metadata' not in SHEET_DATA:
-        return render_template('simple_summary.html',
+        return render_template('simple/summary.html',
                              page_title='Complete Organizations',
                              summary_type='complete',
                              data=[],
@@ -1002,7 +1002,7 @@ def summary_complete():
         {'key': 'staff_date', 'label': 'Staff', 'class': 'text-green-600 text-sm'},
     ]
 
-    return render_template('simple_summary.html',
+    return render_template('simple/summary.html',
                          page_title='Fully Complete Organizations',
                          summary_type='complete',
                          data=data,
@@ -1229,7 +1229,7 @@ def organization_detail(org_name):
                     'has_survey': staff_complete
                 })
 
-        return render_template('organization_detail.html',
+        return render_template('reports/organization_detail.html',
                              org_name=org_name,
                              intake_record=intake_record,
                              completion_pct=completion_pct,
@@ -1267,7 +1267,7 @@ def organization_report(org_name):
         if is_org_report_cached(org_name):
             print(f"[Cache HIT] Using cached report for {org_name}")
             report = REPORT_CACHE['org_reports'][org_name]['report']
-            return render_template('organization_report.html', report=report, org_name=org_name)
+            return render_template('reports/organization_report.html', report=report, org_name=org_name)
 
         # Cache miss - generate new report
         print(f"[Cache MISS] Generating new report for {org_name}")
@@ -1285,7 +1285,7 @@ def organization_report(org_name):
         # Cache the generated report
         cache_org_report(org_name, report)
 
-        return render_template('organization_report.html', report=report, org_name=org_name)
+        return render_template('reports/organization_report.html', report=report, org_name=org_name)
 
     except Exception as e:
         print(f"Error generating report for {org_name}: {e}")
@@ -1315,7 +1315,7 @@ def aggregate_report():
         if is_aggregate_report_cached():
             print(f"[Cache HIT] Using cached aggregate report")
             report = REPORT_CACHE['aggregate_report']['report']
-            return render_template('aggregate_report.html', report=report)
+            return render_template('reports/aggregate_report.html', report=report)
 
         # Cache miss - generate new report
         print(f"[Cache MISS] Generating new aggregate report")
@@ -1333,7 +1333,7 @@ def aggregate_report():
         # Cache the generated report
         cache_aggregate_report(report)
 
-        return render_template('aggregate_report.html', report=report)
+        return render_template('reports/aggregate_report.html', report=report)
 
     except Exception as e:
         print(f"Error generating aggregate report: {e}")

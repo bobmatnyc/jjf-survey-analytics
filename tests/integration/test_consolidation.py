@@ -5,7 +5,12 @@ Tests the consolidate_text method with real examples.
 """
 
 import os
-from ai_analyzer import AIAnalyzer
+import sys
+
+# Add project root to Python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+
+from src.analytics.ai_analyzer import AIAnalyzer
 
 # Test examples from the requirements
 EXAMPLES = {

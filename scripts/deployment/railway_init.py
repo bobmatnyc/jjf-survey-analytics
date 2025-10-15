@@ -47,7 +47,7 @@ def sync_data_from_google_sheets():
 
         start_time = time.time()
         result = subprocess.run(
-            [sys.executable, 'improved_extractor.py'],
+            [sys.executable, 'src/extractors/improved_extractor.py'],
             capture_output=True,
             text=True,
             timeout=300  # 5 minute timeout
@@ -81,7 +81,7 @@ def sync_data_from_google_sheets():
 
         start_time = time.time()
         result = subprocess.run(
-            [sys.executable, 'survey_normalizer.py', '--auto'],
+            [sys.executable, 'src/normalizers/survey_normalizer.py', '--auto'],
             capture_output=True,
             text=True,
             timeout=300  # 5 minute timeout

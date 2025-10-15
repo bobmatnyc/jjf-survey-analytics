@@ -6,8 +6,12 @@ Tests the full flow from report generation to consolidated outputs.
 
 import os
 import sys
-from report_generator import ReportGenerator
-from sheets_reader import SheetsReader
+
+# Add project root to Python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+
+from src.services.report_generator import ReportGenerator
+from src.extractors.sheets_reader import SheetsReader
 
 
 def test_report_consolidation():

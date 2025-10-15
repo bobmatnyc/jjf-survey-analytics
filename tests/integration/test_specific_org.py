@@ -4,8 +4,13 @@ Test specific organization's aggregate summary
 """
 
 import sys
-from sheets_reader import SheetsReader
-from report_generator import ReportGenerator
+import os
+
+# Add project root to Python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+
+from src.extractors.sheets_reader import SheetsReader
+from src.services.report_generator import ReportGenerator
 
 def main():
     org_name = "Jewish New Teacher Project"

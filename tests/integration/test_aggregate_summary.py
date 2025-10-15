@@ -5,8 +5,12 @@ Test script to verify aggregate summary generation
 
 import os
 import sys
-from sheets_reader import SheetsReader
-from report_generator import ReportGenerator
+
+# Add project root to Python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+
+from src.extractors.sheets_reader import SheetsReader
+from src.services.report_generator import ReportGenerator
 
 # Set up environment
 os.environ.setdefault("OPENROUTER_API_KEY", os.getenv("OPENROUTER_API_KEY", ""))

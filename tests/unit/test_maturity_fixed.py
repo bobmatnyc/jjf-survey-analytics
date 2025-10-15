@@ -1,8 +1,14 @@
 """
 Test the fixed maturity rubric with Jewish New Teacher Project data
 """
-from maturity_rubric import MaturityRubric
-from sheets_reader import SheetsReader
+import sys
+import os
+
+# Add project root to Python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+
+from src.analytics.maturity_rubric import MaturityRubric
+from src.extractors.sheets_reader import SheetsReader
 
 def extract_numeric_responses(record):
     """Extract numeric responses from a survey record."""

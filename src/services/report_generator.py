@@ -7,8 +7,8 @@ from collections import defaultdict
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from ai_analyzer import AIAnalyzer, extract_free_text_responses
-from maturity_rubric import MaturityRubric
+from src.analytics.ai_analyzer import AIAnalyzer, extract_free_text_responses
+from src.analytics.maturity_rubric import MaturityRubric
 
 
 class ReportGenerator:
